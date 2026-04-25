@@ -40,3 +40,17 @@ Thumbs.dbs
 /genos/Library
 /genos/Library
 genos/Library/ArtifactDB
+genos/.vsconfig
+/genos/Logs
+/genos/obj/Debug
+/genos/obj/Release
+/genos/Packages
+/genos/ProjectSettings
+genos/UserSettings/AI.Animate/AnimateGeneratorSettings.asset
+/genos/UserSettings/AI.Generators
+/genos/UserSettings/AI.Image
+/genos/UserSettings/AI.Mesh
+/genos/UserSettings/AI.Pbr
+/genos/UserSettings/AI.Sound
+/genos/UserSettings/Layouts
+/genos/UserSettings
