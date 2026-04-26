@@ -4271,6 +4271,15 @@ MonoBehaviour:
   eyeEmissionTextureProperty: _EmissionMap
   emissionColorProperty: _EmissionColor
   facialAnimations: []
+  defaultEyeTextureIndex: 0
+  defaultExpressionMapIndex: 0
+  defaultEyeEmissionIndex: 0
+  enableAutoBlink: 1
+  blinkLeftBlendShapeName: Blink_L
+  blinkRightBlendShapeName: Blink_R
+  minBlinkInterval: 2
+  maxBlinkInterval: 6
+  blinkDuration: 0.1
   testEyeIndex: 0
   testExpressionIndex: 0
   testEyeEmissionColors: []

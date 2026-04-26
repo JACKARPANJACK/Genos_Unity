@@ -1,4 +1,4 @@
-﻿/*
+/*
 MIT License
 
 Copyright (c) 2023 Èric Canela
@@ -31,7 +31,7 @@ using DG.Tweening;
 
 namespace Climbing
 {
-    public enum ParkourState { None, ScriptedTraversal, WallRunning }
+    public enum ParkourState { None, ScriptedTraversal, WallRunning, Dashing }
 
     [RequireComponent(typeof(InputCharacterController))]
     [RequireComponent(typeof(MovementCharacterController))]
@@ -56,22 +56,24 @@ namespace Climbing
         [HideInInspector] public bool inSlope = false;
         [HideInInspector] public bool isVaulting = false;
         [HideInInspector] public bool dummy = false;
+        public bool isDashing => isAirDashing || isGroundDashing;
         [HideInInspector] public ParkourState activeParkourState = ParkourState.None;
 
         [Header("Air Dash Settings")]
-        public float airDashForce = 15f;
-        public float airDashTime = 0.2f;
+        public DashSetting airDashSetting = new DashSetting { dashForce = 15f, dashTime = 0.2f, recoverTime = 0.4f };
         public bool canAirDash = true;
         private bool hasAirDashed = false;
         private bool isAirDashing = false;
+        private float airDashRecoverTimer = 0f;
         private Vector3 airDashDirection;
         private Tween airDashTween;
 
         [Header("Ground Dash Settings")]
-        public float groundDashForce = 20f;
-        public float groundDashTime = 0.25f;
+        public DashSetting groundDashSetting = new DashSetting { dashForce = 20f, dashTime = 0.25f, recoverTime = 0.3f };
         public bool canGroundDash = true;
         private bool isGroundDashing = false;
+        private bool isGroundDashRecovering = false;
+        private float groundDashRecoverTimer = 0f;
         private Vector3 groundDashDirection;
         private Tween groundDashTween;
 
@@ -121,6 +123,7 @@ namespace Climbing
         private void Start()
         {
             characterMovement.OnLanded += characterAnimation.Land;
+            characterMovement.OnLanded += () => cameraController?.ShakeMedium();
             characterMovement.OnFall += characterAnimation.Fall;
         }
 
@@ -132,7 +135,7 @@ namespace Climbing
             //Get Input if controller and movement are not disabled
             if (!dummy && allowMovement)
             {
-                if (!isGroundDashing) 
+                if (!isGroundDashing && !isAirDashing) 
                 {
                     AddMovementInput(characterInput.movement);
                 }
@@ -178,6 +181,7 @@ namespace Climbing
             if (isGrounded)
             {
                 hasAirDashed = false;
+                airDashRecoverTimer = 0f;
                 if (isAirDashing)
                 {
                     isAirDashing = false;
@@ -186,12 +190,22 @@ namespace Climbing
                 return;
             }
 
+            // Explicitly prevent air dash during wallrun
+            if (wallRunController != null && wallRunController.isWallRunning)
+                return;
+
+            // Tick recovery after an air dash
+            if (airDashRecoverTimer > 0f)
+{
+                airDashRecoverTimer -= Time.deltaTime;
+                return;
+            }
+
             if (isAirDashing)
                 return; // Managed by DoTween
 
             if (canAirDash && !hasAirDashed && !isGrounded && !isVaulting && !IsParkourBusy)
             {
-                // Has to have been in the air slightly so it doesn't trigger instantly when jumping off ground
                 if (Time.time > lastJumpTime + 0.25f && characterInput.ConsumeJumpPressedBuffered())
                 {
                     PerformAirDash();
@@ -201,57 +215,118 @@ namespace Climbing
 
         private void PerformAirDash()
         {
+            if (!TrySetParkourState(ParkourState.Dashing)) return;
+
             hasAirDashed = true;
             isAirDashing = true;
 
             airDashTween?.Kill();
 
-            // Consume out the input so it doesn't try firing it elsewhere
+            // Consume the input so it doesn't fire elsewhere
             characterInput.ConsumeJumpPressedBuffered();
 
-            // Apply dash in the direction relative to camera
-            Vector3 intentDir = new Vector3(characterInput.movement.x, 0f, characterInput.movement.y).normalized;
+            // Compute dash direction from camera-relative input
+            Vector3 dashDir = transform.forward; // Default to forward
+            bool hasMovementInput = characterInput.movement.sqrMagnitude > 0.01f;
 
-            if (intentDir.magnitude > 0)
+            if (hasMovementInput)
             {
                 freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
-                airDashDirection = (freeCamera.transform.forward * characterInput.movement.y + freeCamera.transform.right * characterInput.movement.x).normalized;
-
-                // Immediately snap rotation towards air dash
-                transform.rotation = Quaternion.LookRotation(airDashDirection, Vector3.up);
-            }
-            else
-            {
-                airDashDirection = transform.forward; // Default to forward if no input
+                dashDir = (freeCamera.transform.forward * characterInput.movement.y
+                                  + freeCamera.transform.right  * characterInput.movement.x).normalized;
             }
 
-            // You can optionally trigger an air dash animation here
-            characterAnimation.animator.Play("AirDash"); // Change to whatever your air dash animation state is!
+            airDashDirection = dashDir;
 
-            // DoTween AirDash Logic
-            characterMovement.stopMotion = true;
-            airDashTween = DOVirtual.Float(airDashForce, 0f, airDashTime, (force) => 
+            // Backward detection using Dot product relative to camera facing
+            // If dashDir is opposite to camera forward, it's a back dash
+            float forwardDot = Vector3.Dot(dashDir, mainCamera.forward);
+            bool isBackDash = forwardDot < -0.5f;
+
+            // Rotation logic: 
+            // If forward/side dash -> Face dash direction
+            // If back dash -> Face camera forward (dashing back while looking front)
+            if (isBackDash)
             {
-                if (characterMovement != null && characterMovement.rb != null && !isGrounded)
+                Vector3 cameraForwardFlat = mainCamera.forward;
+                cameraForwardFlat.y = 0;
+                if (cameraForwardFlat.sqrMagnitude > 0.001f)
                 {
-                    characterMovement.rb.linearVelocity = (airDashDirection * force) + new Vector3(0, characterMovement.rb.linearVelocity.y > 0 ? 0 : characterMovement.rb.linearVelocity.y, 0);
+                    Quaternion targetRot = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
+                    transform.DORotateQuaternion(targetRot, 0.15f);
                 }
+            }
+            else if (hasMovementInput)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(dashDir, Vector3.up);
+                transform.DORotateQuaternion(targetRot, 0.15f);
+            }
+
+            // Lock camera rotation during dash
+            cameraController?.SetCameraRotationLock(true);
+
+            // Turn off IK during dash
+            characterMovement.DisableFeetIK();
+
+            // Play appropriate animation via unified controller
+            characterAnimation.Dash(isBackDash);
+            characterAnimation.SetDashing(true);
+
+            characterMovement.stopMotion = true;
+            cameraController?.SetFOVState(CameraFOVState.AirDash);
+            cameraController?.ShakeMedium();
+
+            // Sample the curve over normalised time (0→1) to build a designer-tunable force profile
+            airDashTween = DOVirtual.Float(0f, 1f, airDashSetting.dashTime, (t) =>
+            {
+                if (characterMovement == null || characterMovement.rb == null || isGrounded)
+                    return;
+
+                float force = airDashSetting.dashForce * airDashSetting.dashCurve.Evaluate(t);
+                float keepY = characterMovement.rb.linearVelocity.y > 0
+                    ? 0f
+                    : characterMovement.rb.linearVelocity.y;
+                characterMovement.rb.linearVelocity = airDashDirection * force + new Vector3(0, keepY, 0);
             })
-            .SetEase(Ease.OutCirc)
+            .SetEase(Ease.Linear) // Curve drives the shape; Linear keeps sampling honest
             .SetUpdate(UpdateType.Fixed)
-            .OnComplete(() => {
+            .OnComplete(() =>
+            {
                 isAirDashing = false;
+                characterAnimation.SetDashing(false);
+                ClearParkourState(ParkourState.Dashing);
                 characterMovement.stopMotion = false;
+                characterMovement.EnableFeetIK();
+                airDashRecoverTimer = airDashSetting.recoverTime;
+                cameraController?.SetFOVState(CameraFOVState.Walk);
+                cameraController?.SetCameraRotationLock(false);
             })
-            .OnKill(() => {
+            .OnKill(() =>
+            {
                 isAirDashing = false;
-                if (characterMovement != null) characterMovement.stopMotion = false;
+                characterAnimation?.SetDashing(false);
+                ClearParkourState(ParkourState.Dashing);
+                if (characterMovement != null) 
+                {
+                    characterMovement.stopMotion = false;
+                    characterMovement.EnableFeetIK();
+                }
+                cameraController?.SetFOVState(CameraFOVState.Walk);
+                cameraController?.SetCameraRotationLock(false);
             });
-        }
+}
 
         private void HandleGroundDash()
         {
-            if (!isGrounded || isVaulting || IsParkourBusy)
+            // Tick recovery between ground dashes
+            if (isGroundDashRecovering)
+            {
+                groundDashRecoverTimer -= Time.deltaTime;
+                if (groundDashRecoverTimer <= 0f)
+                    isGroundDashRecovering = false;
+            }
+
+            if (!isGrounded || isVaulting || IsParkourBusy || (wallRunController != null && wallRunController.isWallRunning))
             {
                 if (isGroundDashing)
                 {
@@ -262,9 +337,9 @@ namespace Climbing
             }
 
             if (isGroundDashing)
-                return; // Let DoTween manage the velocity updates inside FixedUpdate via SetUpdate(Fixed)
+                return; // Let DoTween manage velocity updates inside FixedUpdate via SetUpdate(Fixed)
 
-            if (canGroundDash && characterInput.ConsumeDoubleTapDashBuffered())
+            if (canGroundDash && !isGroundDashRecovering && characterInput.ConsumeDoubleTapDashBuffered())
             {
                 PerformGroundDash();
             }
@@ -272,47 +347,229 @@ namespace Climbing
 
         private void PerformGroundDash()
         {
+            if (!TrySetParkourState(ParkourState.Dashing)) return;
+
             isGroundDashing = true;
             groundDashTween?.Kill();
 
-            Vector3 intentDir = new Vector3(characterInput.movement.x, 0f, characterInput.movement.y).normalized;
-            if (intentDir.magnitude > 0)
+            // Compute dash direction from camera-relative input
+            Vector3 dashDir = transform.forward;
+            bool hasMovementInput = characterInput.movement.sqrMagnitude > 0.01f;
+
+            if (hasMovementInput)
             {
                 freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
-                groundDashDirection = (freeCamera.transform.forward * characterInput.movement.y + freeCamera.transform.right * characterInput.movement.x).normalized;
+                dashDir = (freeCamera.transform.forward * characterInput.movement.y
+                                     + freeCamera.transform.right  * characterInput.movement.x).normalized;
             }
-            else
+
+            groundDashDirection = dashDir;
+
+            // Backward detection
+            float forwardDot = Vector3.Dot(dashDir, mainCamera.forward);
+            bool isBackDash = forwardDot < -0.5f;
+
+            // Rotation logic
+            if (isBackDash)
             {
-                groundDashDirection = transform.forward;
+                Vector3 cameraForwardFlat = mainCamera.forward;
+                cameraForwardFlat.y = 0;
+                if (cameraForwardFlat.sqrMagnitude > 0.001f)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
+                    transform.DORotateQuaternion(targetRot, 0.15f);
+                }
+            }
+            else if (hasMovementInput)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(dashDir, Vector3.up);
+                transform.DORotateQuaternion(targetRot, 0.15f);
             }
 
-            // You can optionally trigger a ground dodge roll animation here
-            characterAnimation.animator.Play("Dash");
+            // Lock camera rotation
+            cameraController?.SetCameraRotationLock(true);
 
-            // Look in dash dir
-            transform.rotation = Quaternion.LookRotation(groundDashDirection, Vector3.up);
+            // Turn off IK
+            characterMovement.DisableFeetIK();
+
+            // Play appropriate animation via unified controller
+            characterAnimation.Dash(isBackDash);
+            characterAnimation.SetDashing(true);
 
             characterMovement.stopMotion = true;
-            groundDashTween = DOVirtual.Float(groundDashForce, 0f, groundDashTime, (force) =>
+            cameraController?.SetFOVState(CameraFOVState.Parkour);
+            cameraController?.ShakeLight();
+
+            // Sample the curve over normalised time (0→1) for a designer-tunable force profile
+            groundDashTween = DOVirtual.Float(0f, 1f, groundDashSetting.dashTime, (t) =>
             {
-                if (characterMovement != null && characterMovement.rb != null && isGrounded)
-                {
-                    characterMovement.rb.linearVelocity = new Vector3(groundDashDirection.x * force, characterMovement.rb.linearVelocity.y, groundDashDirection.z * force);
-                }
+                if (characterMovement == null || characterMovement.rb == null || !isGrounded)
+                    return;
+
+                float force = groundDashSetting.dashForce * groundDashSetting.dashCurve.Evaluate(t);
+                characterMovement.rb.linearVelocity = new Vector3(
+                    groundDashDirection.x * force,
+                    characterMovement.rb.linearVelocity.y,
+                    groundDashDirection.z * force);
             })
-            .SetEase(Ease.OutCubic)
+            .SetEase(Ease.Linear) // Curve drives the shape; Linear keeps sampling honest
             .SetUpdate(UpdateType.Fixed)
             .OnComplete(() =>
             {
                 isGroundDashing = false;
+                characterAnimation.SetDashing(false);
+                ClearParkourState(ParkourState.Dashing);
                 characterMovement.stopMotion = false;
+                characterMovement.EnableFeetIK();
+                isGroundDashRecovering = true;
+                groundDashRecoverTimer = groundDashSetting.recoverTime;
+                cameraController?.SetFOVState(CameraFOVState.Run);
+                cameraController?.SetCameraRotationLock(false);
             })
             .OnKill(() =>
             {
                 isGroundDashing = false;
-                if (characterMovement != null) characterMovement.stopMotion = false;
+                characterAnimation?.SetDashing(false);
+                ClearParkourState(ParkourState.Dashing);
+                if (characterMovement != null) 
+                {
+                    characterMovement.stopMotion = false;
+                    characterMovement.EnableFeetIK();
+                }
+                cameraController?.SetFOVState(CameraFOVState.Walk);
+                cameraController?.SetCameraRotationLock(false);
             });
-        }
+}
+
+        /// <summary>
+        /// Explicitly triggers a backward dash, pushing the player away from their current facing direction.
+        /// </summary>
+        public void PerformBackDash()
+        {
+            if (isGroundDashing || isAirDashing || !allowMovement) return;
+
+            // Lock camera
+            cameraController?.SetCameraRotationLock(true);
+
+            // Turn off IK
+            characterMovement.DisableFeetIK();
+
+            // Compute dash direction (backward relative to camera/facing)
+Vector3 dashDir;
+            if (characterInput.movement.sqrMagnitude > 0.01f)
+            {
+                freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
+                dashDir = (freeCamera.transform.forward * characterInput.movement.y
+                         + freeCamera.transform.right  * characterInput.movement.x).normalized;
+            }
+            else
+            {
+                dashDir = -transform.forward;
+            }
+
+            // For explicit back dash, we definitely want to face forward
+            Vector3 cameraForwardFlat = mainCamera.forward;
+            cameraForwardFlat.y = 0;
+            if (cameraForwardFlat.sqrMagnitude > 0.001f)
+                transform.rotation = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
+
+            if (isGrounded)
+            {
+                if (!TrySetParkourState(ParkourState.Dashing)) return;
+
+                isGroundDashing = true;
+                groundDashTween?.Kill();
+                groundDashDirection = dashDir;
+                characterAnimation.Dash(true);
+                characterAnimation.SetDashing(true);
+                
+                characterMovement.stopMotion = true;
+                cameraController?.SetFOVState(CameraFOVState.Parkour);
+                cameraController?.ShakeLight();
+
+                groundDashTween = DOVirtual.Float(0f, 1f, groundDashSetting.dashTime, (t) =>
+                {
+                    if (characterMovement == null || characterMovement.rb == null || !isGrounded) return;
+                    float force = groundDashSetting.dashForce * groundDashSetting.dashCurve.Evaluate(t);
+                    characterMovement.rb.linearVelocity = new Vector3(groundDashDirection.x * force, characterMovement.rb.linearVelocity.y, groundDashDirection.z * force);
+                })
+                .SetEase(Ease.Linear)
+                .SetUpdate(UpdateType.Fixed)
+                .OnComplete(() => {
+                    isGroundDashing = false;
+                    characterAnimation.SetDashing(false);
+                    ClearParkourState(ParkourState.Dashing);
+                    characterMovement.stopMotion = false;
+                    characterMovement.EnableFeetIK();
+                    isGroundDashRecovering = true;
+                    groundDashRecoverTimer = groundDashSetting.recoverTime;
+                    cameraController?.SetFOVState(CameraFOVState.Walk);
+                    cameraController?.SetCameraRotationLock(false);
+                })
+                .OnKill(() => {
+                    isGroundDashing = false;
+                    characterAnimation?.SetDashing(false);
+                    ClearParkourState(ParkourState.Dashing);
+                    if (characterMovement != null) 
+                    {
+                        characterMovement.stopMotion = false;
+                        characterMovement.EnableFeetIK();
+                    }
+                    cameraController?.SetCameraRotationLock(false);
+                });
+                }
+                else if (!hasAirDashed)
+                {
+                if (!TrySetParkourState(ParkourState.Dashing)) return;
+
+                hasAirDashed = true;
+                isAirDashing = true;
+                airDashTween?.Kill();
+                airDashDirection = dashDir;
+                characterAnimation.Dash(true);
+                characterAnimation.SetDashing(true);
+                
+                characterMovement.stopMotion = true;
+                cameraController?.SetFOVState(CameraFOVState.AirDash);
+                cameraController?.ShakeMedium();
+
+                airDashTween = DOVirtual.Float(0f, 1f, airDashSetting.dashTime, (t) =>
+                {
+                    if (characterMovement == null || characterMovement.rb == null || isGrounded) return;
+                    float force = airDashSetting.dashForce * airDashSetting.dashCurve.Evaluate(t);
+                    characterMovement.rb.linearVelocity = airDashDirection * force + new Vector3(0, characterMovement.rb.linearVelocity.y, 0);
+                })
+                .SetEase(Ease.Linear)
+                .SetUpdate(UpdateType.Fixed)
+                .OnComplete(() => {
+                    isAirDashing = false;
+                    characterAnimation.SetDashing(false);
+                    ClearParkourState(ParkourState.Dashing);
+                    characterMovement.stopMotion = false;
+                    characterMovement.EnableFeetIK();
+                    airDashRecoverTimer = airDashSetting.recoverTime;
+                    cameraController?.SetFOVState(CameraFOVState.Walk);
+                    cameraController?.SetCameraRotationLock(false);
+                })
+                .OnKill(() => {
+                    isAirDashing = false;
+                    characterAnimation?.SetDashing(false);
+                    ClearParkourState(ParkourState.Dashing);
+                    if (characterMovement != null) 
+                    {
+                        characterMovement.stopMotion = false;
+                        characterMovement.EnableFeetIK();
+                    }
+                    cameraController?.SetCameraRotationLock(false);
+                });
+                }
+else
+{
+    // Fallback unlock if nothing happened
+    characterMovement.EnableFeetIK();
+    cameraController?.SetCameraRotationLock(false);
+}
+}
 
         private void UpdateGroundJumpCharge()
         {
@@ -369,10 +626,12 @@ namespace Climbing
             isGrounded = false;
             lastJumpTime = Time.time;
 
-            // Set animation trigger
-            characterAnimation.animator.Play("Jump"); // You can change this to your actual jump animation state name
+            cameraController?.ShakeLight();
 
-            // Apply upward force using DOTween to smoothly transition vertical velocity extremely quickly (more natural "muscle push" feel)
+            // Set animation trigger via unified controller
+            characterAnimation.Jump();
+
+            // Apply upward force using DOTweento smoothly transition vertical velocity extremely quickly (more natural "muscle push" feel)
             float jumpVelocity = baseJumpVelocity + (maxExtraJumpVelocity * chargeRatio);
 
             DOVirtual.Float(0f, jumpVelocity, 0.12f, (v) => 
@@ -426,6 +685,12 @@ namespace Climbing
 
                 // Reset turning angle when player starts moving
                 characterAnimation.animator.SetFloat("TurnAngle", 0f);
+
+                // Restore FOV to current intended movement speed
+                if (characterMovement.GetState() == MovementState.Running)
+                    cameraController?.SetFOVState(CameraFOVState.Run);
+                else
+                    cameraController?.SetFOVState(CameraFOVState.Walk);
             }
             else
             {
@@ -450,6 +715,7 @@ namespace Climbing
                 }
 
                 ToggleWalk();
+                cameraController?.SetFOVState(CameraFOVState.Idle);
                 characterAnimation.animator.SetBool("Released", true);
             }
 
@@ -487,6 +753,7 @@ namespace Climbing
                 characterMovement.curSpeed = characterMovement.RunSpeed;
                 characterAnimation.animator.SetBool("Run", true);
             }
+            cameraController?.SetFOVState(CameraFOVState.Run);
         }
         public void ToggleWalk()
         {
@@ -496,6 +763,7 @@ namespace Climbing
                 characterMovement.curSpeed = characterMovement.walkSpeed;
                 characterAnimation.animator.SetBool("Run", false);
             }
+            cameraController?.SetFOVState(CameraFOVState.Walk);
         }
 
 

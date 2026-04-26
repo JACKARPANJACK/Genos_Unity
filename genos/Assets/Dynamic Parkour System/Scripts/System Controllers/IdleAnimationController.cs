@@ -153,8 +153,8 @@ namespace Climbing
 
                 if (faceController != null)
                 {
-                    // Optionally reset back to a default expression when exiting idle
-                    faceController.PlayFacialAnimation("Default");
+                    // Cleanly reset back to the default static configuration
+                    faceController.ResetToDefault();
                 }
             }
             SetNewTargetTime();
@@ -199,7 +199,7 @@ namespace Climbing
                 else
                 {
                     // Fallback back to Default expression if no mapping exists for this specific idle!
-                    faceController.PlayFacialAnimation("Default");
+                    faceController.ResetToDefault();
                 }
             }
 

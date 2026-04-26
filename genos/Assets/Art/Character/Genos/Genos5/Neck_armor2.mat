@@ -145,12 +145,12 @@ Material:
     - _Metallic: 0
     - _Mode: 0
     - _OcclusionStrength: 1
-    - _OutlineWidth: 0.005
+    - _OutlineWidth: 0.0008
     - _Parallax: 0.02
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _RimIntensity: 1
-    - _RimPower: 5
+    - _RimPower: 10
     - _ScrollX: 0
     - _ScrollY: 0
     - _ShadingMode: 3

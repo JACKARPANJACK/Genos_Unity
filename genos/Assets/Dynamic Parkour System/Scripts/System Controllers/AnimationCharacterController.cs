@@ -1,4 +1,4 @@
-﻿/*
+/*
 MIT License
 
 Copyright (c) 2023 Èric Canela
@@ -183,6 +183,36 @@ namespace Climbing
         public void EnableController()
         {
             controller.EnableController();
+        }
+
+        public void Dash(bool isBackDash)
+        {
+            string stateName = isBackDash ? "Dash_BWD" : "Dash";
+            animator.CrossFadeInFixedTime(stateName, 0.1f);
+        }
+
+        public void SetDashing(bool state)
+        {
+            animator.SetBool("isDashing", state);
+        }
+
+        public void Jump()
+        {
+            animator.CrossFadeInFixedTime("Jump", 0.1f);
+        }
+
+        public void SetWallRunning(bool state, float side = 0f)
+        {
+            animator.SetBool("IsWallRunning", state);
+            if (state)
+            {
+                animator.SetFloat("WallRunSide", side);
+            }
+        }
+
+        public void UpdateWallRunSide(float side)
+        {
+            animator.SetFloat("WallRunSide", side);
         }
 
         public void SetMatchTarget(AvatarTarget avatarTarget, Vector3 targetPos, Quaternion targetRot, Vector3 offset, float startnormalizedTime, float targetNormalizedTime)

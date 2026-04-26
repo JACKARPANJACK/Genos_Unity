@@ -70,6 +70,30 @@ public class AnimeFaceController : MonoBehaviour
     [Tooltip("Store your custom combinations of blendshapes and textures here. Call PlayFacialAnimation(name) from other scripts.")]
     public List<AnimeFacialAnimation> facialAnimations = new List<AnimeFacialAnimation>();
 
+    [Header("Default Rest States")]
+    [Tooltip("The normal eye texture index to revert to when resetting (Usually 0).")]
+    public int defaultEyeTextureIndex = 0;
+    [Tooltip("The normal expression map index to revert to when resetting (Usually 0).")]
+    public int defaultExpressionMapIndex = 0;
+    [Tooltip("The normal eye emission map index to revert to when resetting (Usually 0).")]
+    public int defaultEyeEmissionIndex = 0;
+
+    [Header("Auto Blinking")]
+    [Tooltip("Enable automatic blinking during the regular idle state (or anytime).")]
+    public bool enableAutoBlink = true;
+    [BlendShapeDropdown]
+    public string blinkLeftBlendShapeName = "Blink_L";
+    [BlendShapeDropdown]
+    public string blinkRightBlendShapeName = "Blink_R";
+    public float minBlinkInterval = 2f;
+    public float maxBlinkInterval = 6f;
+    public float blinkDuration = 0.1f;
+
+    private float blinkTimer = 0f;
+    private float nextBlinkTime = 3f;
+    private bool isBlinking = false;
+    private bool suppressBlink = false; // Used to stop blinking when performing heavy custom face anims
+
     [Header("Testing & Debug (Play Mode Only)")]
     [Tooltip("Change this number in the Inspector during Play Mode to instantly test an Eye Texture.")]
     public int testEyeIndex = 0;
@@ -120,6 +144,18 @@ public class AnimeFaceController : MonoBehaviour
 
     private void Update()
     {
+        if (Application.isPlaying && enableAutoBlink && !suppressBlink)
+        {
+            blinkTimer += Time.deltaTime;
+            if (blinkTimer >= nextBlinkTime)
+            {
+                PerformBlink();
+                blinkTimer = 0f;
+                // Randomize the wait for the next blink! (adds lots of life)
+                nextBlinkTime = Random.Range(minBlinkInterval, maxBlinkInterval);
+            }
+        }
+
         // Run tests continuously in the editor during Play mode 
         if (Application.isPlaying)
         {
@@ -279,6 +315,79 @@ public class AnimeFaceController : MonoBehaviour
     }
 
     /// <summary>
+    /// Fast blinking logic using DOTween on the defined Blink BlendShape
+    /// </summary>
+    private void PerformBlink()
+    {
+        if (blendShapeMeshes == null || isBlinking) return;
+
+        // Decide blink type: 0 = Both, 1 = Left Only, 2 = Right Only
+        int blinkType = Random.Range(0, 3);
+
+        // Build list of valid blink shape names that have been set in the inspector
+        List<string> activeBlinkShapes = new List<string>();
+
+        if (blinkType == 0 || blinkType == 1) // Both or Left
+        {
+            if (!string.IsNullOrEmpty(blinkLeftBlendShapeName)) activeBlinkShapes.Add(blinkLeftBlendShapeName);
+        }
+
+        if (blinkType == 0 || blinkType == 2) // Both or Right
+        {
+            if (!string.IsNullOrEmpty(blinkRightBlendShapeName)) activeBlinkShapes.Add(blinkRightBlendShapeName);
+        }
+
+        if (activeBlinkShapes.Count == 0) return; // Nothing to blink
+
+        isBlinking = true;
+
+        Sequence blinkSequence = DOTween.Sequence();
+
+        foreach (var smr in blendShapeMeshes)
+        {
+            if (smr == null || smr.sharedMesh == null) continue;
+
+            foreach (string shapeName in activeBlinkShapes)
+            {
+                int bsIndex = smr.sharedMesh.GetBlendShapeIndex(shapeName);
+                if (bsIndex != -1)
+                {
+                    // Kill any straggler tween on this exact property so we own it exclusively
+                    DOTween.Kill(smr.GetInstanceID() + "_" + bsIndex);
+
+                    // Animate down to 100 (eyes closed) and immediately back to 0 (eyes open)
+                    blinkSequence.Insert(0, DOVirtual.Float(0f, 100f, blinkDuration / 2f, (v) => {
+                        if (smr != null) smr.SetBlendShapeWeight(bsIndex, v);
+                    }).SetEase(Ease.OutSine));
+
+                    blinkSequence.Insert(blinkDuration / 2f, DOVirtual.Float(100f, 0f, blinkDuration / 2f, (v) => {
+                        if (smr != null) smr.SetBlendShapeWeight(bsIndex, v);
+                    }).SetEase(Ease.Linear));
+                }
+            }
+        }
+
+        blinkSequence.OnComplete(() => {
+            isBlinking = false;
+        });
+    }
+
+    /// <summary>
+    /// Smoothly resets the face entirely back to its default clean slate (base textures and all blendshapes to 0).
+    /// </summary>
+    public void ResetToDefault(float duration = 0.25f, Ease ease = Ease.InOutSine)
+    {
+        suppressBlink = false; // Re-establish blinking logic natively
+
+        SetEyeTexture(defaultEyeTextureIndex);
+        SetExpressionMap(defaultExpressionMapIndex);
+        SetEyeEmissionTexture(defaultEyeEmissionIndex);
+
+        // Supply an empty HashSet so ALL active blendshapes will be animated smoothly to 0!
+        ResetUnreferencedBlendShapes(new HashSet<string>(), duration, ease);
+    }
+
+    /// <summary>
     /// Sets a BlendShape weight securely by its string name across all linked meshes.
     /// Safely ignores meshes that don't have that specific BlendShape.
     /// </summary>
@@ -326,6 +435,16 @@ public class AnimeFaceController : MonoBehaviour
         {
             Debug.LogWarning($"AnimeFaceController: Could not find facial animation '{animName}'");
             return;
+        }
+
+        // Suppress blinking natively while we are actively playing a facial animation (unless it's just 'Default')
+        if (animName.ToLower() != "default") 
+        {
+            suppressBlink = true;
+        }
+        else 
+        {
+            suppressBlink = false;
         }
 
         // Texture swaps instantly trigger for snap-like crispness
