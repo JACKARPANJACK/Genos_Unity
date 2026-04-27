@@ -185,9 +185,16 @@ namespace Climbing
             controller.EnableController();
         }
 
-        public void Dash(bool isBackDash)
+        public void Dash(int direction)
         {
-            string stateName = isBackDash ? "Dash_BWD" : "Dash";
+            string stateName = "Dash";
+            if (direction == 1)
+                stateName = "Dash_BWD";
+            else if (direction == 2)
+                stateName = "Dash_L";
+            else if (direction == 3)
+                stateName = "Dash_R";
+
             animator.CrossFadeInFixedTime(stateName, 0.1f);
         }
 

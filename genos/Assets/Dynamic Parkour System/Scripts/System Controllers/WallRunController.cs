@@ -100,8 +100,8 @@ public float maxWallRunTime = 4.0f;
             {
                 wallRunTimer += Time.deltaTime;
 
-                // Exit conditions: time limit, grounded
-                if (wallRunTimer >= maxWallRunTime || thirdPersonController.isGrounded)
+                // Exit conditions: time limit, grounded (but give it a tiny grace period to leave the ground)
+                if (wallRunTimer >= maxWallRunTime || (thirdPersonController.isGrounded && wallRunTimer > 0.2f))
                 {
                     StopWallRun();
                 }
@@ -124,11 +124,13 @@ public float maxWallRunTime = 4.0f;
 
         private void CheckForWall()
         {
+            // Check if jumping or in air
             if (thirdPersonController.isGrounded && !isWallRunning)
             {
                 lastWall = null; 
-                return;
+                // Do not return here so we can start wall running from the ground
             }
+
             if (!canWallRun) return;
 
             Vector3 rayOrigin = transform.position + (Vector3.up * raycastYOffset);
@@ -139,6 +141,9 @@ public float maxWallRunTime = 4.0f;
             // forgiving distance
             float checkDist = isWallRunning ? wallCheckDistance + 0.8f : wallCheckDistance;
 
+            // Only search for Up Direction if we are actively jumping into the wall or looking straight up at it
+            bool wantsUpClimb = !thirdPersonController.isGrounded;
+
             // Search priority: Check current direction first if already running
             if (isWallRunning)
             {
@@ -148,11 +153,22 @@ public float maxWallRunTime = 4.0f;
                     wallNormal = hit.normal;
                     wallFound = true;
                 }
+                else if (currentDir == WallRunDirection.Up)
+                {
+                    // Upper cast missed; check lower body to detect ledge for automatic mantle
+                    Vector3 lowerRayOrigin = transform.position + (Vector3.up * 0.4f);
+                    if (Physics.Raycast(lowerRayOrigin, transform.forward, out RaycastHit lowerHit, checkDist + 0.5f, wallLayer) && IsValidWall(lowerHit.collider))
+                    {
+                        WallMantle();
+                        return;
+                    }
+                }
             }
 
             if (!wallFound)
             {
                 // General detection
+                // Right
                 if (Physics.SphereCast(rayOrigin, sphereCastRadius, transform.right, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
                 {
                     wallNormal = hit.normal;
@@ -160,6 +176,7 @@ public float maxWallRunTime = 4.0f;
                     wallFound = true;
                     lastWall = hit.collider;
                 }
+                // Left
                 else if (Physics.SphereCast(rayOrigin, sphereCastRadius, -transform.right, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
                 {
                     wallNormal = hit.normal;
@@ -167,10 +184,26 @@ public float maxWallRunTime = 4.0f;
                     wallFound = true;
                     lastWall = hit.collider;
                 }
-                else if (Physics.SphereCast(rayOrigin, sphereCastRadius, transform.forward, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
+                // Up (Require jumping/midair to trigger upwards run)
+                else if (wantsUpClimb && Physics.SphereCast(rayOrigin, sphereCastRadius, transform.forward, out hit, checkDist * 1.5f, wallLayer) && IsValidWall(hit.collider))
                 {
                     wallNormal = hit.normal;
                     currentDir = WallRunDirection.Up;
+                    wallFound = true;
+                    lastWall = hit.collider;
+                }
+                // Diagonal Forward Checks (Helps with jumping INTO walls at angles)
+                else if (Physics.SphereCast(rayOrigin, sphereCastRadius, (transform.forward + transform.right).normalized, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
+                {
+                    wallNormal = hit.normal;
+                    currentDir = WallRunDirection.Right;
+                    wallFound = true;
+                    lastWall = hit.collider;
+                }
+                else if (Physics.SphereCast(rayOrigin, sphereCastRadius, (transform.forward - transform.right).normalized, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
+                {
+                    wallNormal = hit.normal;
+                    currentDir = WallRunDirection.Left;
                     wallFound = true;
                     lastWall = hit.collider;
                 }
@@ -198,11 +231,12 @@ public float maxWallRunTime = 4.0f;
 
             // Maintain entry momentum
             Vector3 horizontalVel = new Vector3(characterMovement.rb.linearVelocity.x, 0, characterMovement.rb.linearVelocity.z);
-currentWallRunSpeed = Mathf.Max(horizontalVel.magnitude, wallRunSpeedBase);
+            currentWallRunSpeed = Mathf.Max(horizontalVel.magnitude, wallRunSpeedBase);
             currentWallRunSpeed = Mathf.Min(currentWallRunSpeed + 2f, wallRunSpeedMax); // Slight entry boost
 
             characterMovement.rb.useGravity = false;
-            
+            characterMovement.DisableFeetIK();  // Disable IK for the run duration
+
             // Initial vertical adjustment
             float yVel = characterMovement.rb.linearVelocity.y;
             characterMovement.rb.linearVelocity = new Vector3(characterMovement.rb.linearVelocity.x, Mathf.Max(yVel * 0.5f, 0), characterMovement.rb.linearVelocity.z);
@@ -222,51 +256,72 @@ currentWallRunSpeed = Mathf.Max(horizontalVel.magnitude, wallRunSpeedBase);
             }
 
             private void ApplyWallRunPhysics()
-        {
-            Rigidbody rb = characterMovement.rb;
-            
-            // Accelerate over time
-            currentWallRunSpeed = Mathf.MoveTowards(currentWallRunSpeed, wallRunSpeedMax, wallRunAcceleration * Time.fixedDeltaTime);
-
-            // Vector parallel to the wall and the floor
-            Vector3 wallForward = Vector3.Cross(wallNormal, Vector3.up).normalized;
-            if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
-
-            if (currentDir == WallRunDirection.Up)
             {
-                // Vertical wallrun (climb)
-                Vector3 targetVel = Vector3.up * currentWallRunSpeed;
-                // Add a small push into the wall to stay attached
-                targetVel += -wallNormal * 4f; 
-                rb.linearVelocity = targetVel;
-            }
-            else
-            {
-                // Horizontal wallrun
-                float currentY = rb.linearVelocity.y;
-                currentY -= wallGravity * Time.fixedDeltaTime;
+                Rigidbody rb = characterMovement.rb;
 
-                // Combine forward movement along wall with gravitational fall
-                Vector3 targetVel = (wallForward * currentWallRunSpeed) + (Vector3.up * currentY);
-                
-                // STICKY FORCE: Push harder into the wall normal
-                targetVel += -wallNormal * 6f;
+                // Accelerate over time
+                currentWallRunSpeed = Mathf.MoveTowards(currentWallRunSpeed, wallRunSpeedMax, wallRunAcceleration * Time.fixedDeltaTime);
 
-                rb.linearVelocity = targetVel;
+                Vector3 projectedVelocity;
+
+                if (currentDir == WallRunDirection.Up)
+                {
+                    // Ninja Gaiden style vertical wallrun - projected onto the wall perfectly
+                    Vector3 wallUp = Vector3.ProjectOnPlane(Vector3.up, wallNormal).normalized;
+                    projectedVelocity = wallUp * currentWallRunSpeed;
+                }
+                else
+                {
+                    // Titanfall style horizontal wallrun projected along the wall
+                    Vector3 wallForward = Vector3.ProjectOnPlane(transform.forward, wallNormal).normalized;
+                    if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
+
+                    float currentY = rb.linearVelocity.y;
+                    currentY -= wallGravity * Time.fixedDeltaTime;
+
+                    projectedVelocity = (wallForward * currentWallRunSpeed) + (Vector3.up * currentY);
+                }
+
+                // STICKY FORCE: Push harder into the wall normal to ride corners/curves
+                projectedVelocity += -wallNormal * wallStickyForce;
+
+                rb.linearVelocity = projectedVelocity;
             }
-}
 
         private void WallKick()
         {
             StopWallRun(startCooldown: false);
 
             Rigidbody rb = characterMovement.rb;
-            
-            // Titanfall style "Kick" - Push away from wall and forward
-            Vector3 kickDir = (wallNormal * wallKickForce) + (Vector3.up * wallKickUpForce) + (transform.forward * wallKickForwardForce);
-            
+
+            // Titanfall / MGR style "Kick" - project forward momentum and burst outward/upward
+            Vector3 wallForward = Vector3.ProjectOnPlane(transform.forward, wallNormal).normalized;
+            if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
+
+            Vector3 kickDir = (wallNormal * wallKickForce) + (Vector3.up * wallKickUpForce) + (wallForward * wallKickForwardForce);
+
             rb.linearVelocity = kickDir;
-            
+
+            thirdPersonController.cameraController?.ShakeMedium();
+            StartCoroutine(WallRunCooldownRoutine(wallRunCooldown));
+        }
+
+        private void WallMantle()
+        {
+            StopWallRun(startCooldown: false);
+
+            Rigidbody rb = characterMovement.rb;
+            rb.linearVelocity = Vector3.zero;
+
+            Vector3 mantleDir = (Vector3.up * wallKickUpForce * 0.85f) + (transform.forward * wallKickForwardForce * 1.5f);
+            rb.AddForce(mantleDir, ForceMode.Impulse);
+
+            if (thirdPersonController.characterAnimation != null)
+            {
+                // Play a generic vault/deep jump to simulate pulling over the edge
+                thirdPersonController.characterAnimation.animator.CrossFade("Deep Jump", 0.1f);
+            }
+
             thirdPersonController.cameraController?.ShakeMedium();
             StartCoroutine(WallRunCooldownRoutine(wallRunCooldown));
         }
@@ -280,6 +335,7 @@ currentWallRunSpeed = Mathf.Max(horizontalVel.magnitude, wallRunSpeedBase);
 
             characterMovement.rb.useGravity = true;
             characterMovement.stopMotion = false;
+            characterMovement.EnableFeetIK(); // Re-enable feet IK
             thirdPersonController.ClearParkourState(ParkourState.WallRunning);
             SwapColliders(false);
 
@@ -311,15 +367,28 @@ currentWallRunSpeed = Mathf.Max(horizontalVel.magnitude, wallRunSpeedBase);
 
             if (characterModel != null)
             {
-                Vector3 wallForward = Vector3.Cross(wallNormal, Vector3.up).normalized;
-                if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
+                if (currentDir == WallRunDirection.Up)
+                {
+                    // Look up along the wall while orienting the back towards the wall normal
+                    Vector3 wallUp = Vector3.ProjectOnPlane(Vector3.up, wallNormal).normalized;
+                    Quaternion targetRotation = Quaternion.LookRotation(wallUp, wallNormal);
+                    characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRotation, Time.deltaTime * modelRotationSpeed);
+                }
+                else
+                {
+                    Vector3 wallForward = Vector3.ProjectOnPlane(transform.forward, wallNormal).normalized;
+                    if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
 
-                Vector3 targetUp = Vector3.up;
-                if (currentDir == WallRunDirection.Left) targetUp = Quaternion.AngleAxis(-20f, wallForward) * Vector3.up;
-                else if (currentDir == WallRunDirection.Right) targetUp = Quaternion.AngleAxis(20f, wallForward) * Vector3.up;
+                    Vector3 targetUp = Vector3.up;
+                    if (currentDir == WallRunDirection.Left) targetUp = Quaternion.AngleAxis(-25f, wallForward) * Vector3.up;
+                    else if (currentDir == WallRunDirection.Right) targetUp = Quaternion.AngleAxis(25f, wallForward) * Vector3.up;
 
-                Quaternion targetRotation = Quaternion.LookRotation(wallForward, targetUp);
-                characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRotation, Time.deltaTime * modelRotationSpeed);
+                    // Blend with the wall normal to hug angled surfaces seamlessly
+                    targetUp = Vector3.Slerp(targetUp, wallNormal + Vector3.up, 0.4f).normalized;
+
+                    Quaternion targetRotation = Quaternion.LookRotation(wallForward, targetUp);
+                    characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRotation, Time.deltaTime * modelRotationSpeed);
+                }
             }
         }
 
