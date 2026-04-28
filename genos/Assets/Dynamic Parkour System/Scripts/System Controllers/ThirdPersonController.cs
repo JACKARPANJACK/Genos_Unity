@@ -176,8 +176,16 @@ namespace Climbing
 
         private float lastJumpTime = -1f;
 
-        private void HandleAirDash()
+        public void ResetJumpTime()
         {
+            lastJumpTime = Time.time;
+            isJumping = true;
+            onAir = true;
+            isGrounded = false;
+        }
+
+        private void HandleAirDash()
+{
             if (isGrounded)
             {
                 hasAirDashed = false;
@@ -206,7 +214,7 @@ namespace Climbing
 
             if (canAirDash && !hasAirDashed && !isGrounded && !isVaulting && !IsParkourBusy)
             {
-                if (Time.time > lastJumpTime + 0.25f && characterInput.ConsumeJumpPressedBuffered())
+                if ((Time.time > lastJumpTime + 0.25f && characterInput.ConsumeJumpPressedBuffered()) || characterInput.ConsumeDashPressedBuffered())
                 {
                     PerformAirDash();
                 }
@@ -225,45 +233,67 @@ namespace Climbing
             // Consume the input so it doesn't fire elsewhere
             characterInput.ConsumeJumpPressedBuffered();
 
-            // Compute dash direction from camera-relative input
-            Vector3 dashDir = transform.forward; // Default to forward
-            bool hasMovementInput = characterInput.movement.sqrMagnitude > 0.01f;
+            // Find target parkour point - 20m range as requested
+            Point targetPoint = FindNearestParkourPoint(20f, 60f);
 
-            if (hasMovementInput)
+            // Find if backwards input is applied relative to camera
+            bool isBackDash = characterInput.movement.y < -0.1f;
+            bool hasInput = characterInput.movement.sqrMagnitude > 0.01f;
+
+            Vector3 camFwd = mainCamera.forward;
+            camFwd.y = 0;
+            camFwd.Normalize();
+
+            Vector3 camRt = mainCamera.right;
+            camRt.y = 0;
+            camRt.Normalize();
+
+            Vector3 dashDir;
+            float overrideDashForce = -1f;
+
+            if (targetPoint != null)
             {
-                freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
-                dashDir = (freeCamera.transform.forward * characterInput.movement.y
-                                  + freeCamera.transform.right  * characterInput.movement.x).normalized;
+                dashDir = (targetPoint.transform.position - transform.position).normalized;
+                float dist = Vector3.Distance(targetPoint.transform.position, transform.position);
+                
+                // Scale force to reach the point exactly within dashTime, capped at 60 units/s
+                overrideDashForce = Mathf.Min(dist / airDashSetting.dashTime, 60f);
+                
+                transform.rotation = Quaternion.LookRotation(new Vector3(dashDir.x, 0, dashDir.z), Vector3.up);
+                airDashDirection = dashDir;
+                isBackDash = false; // Override backdash if we target a point
             }
-
-            airDashDirection = dashDir;
-
-            // Backward detection using Dot product relative to camera facing
-            // If dashDir is opposite to camera forward, it's a back dash
-            float forwardDot = Vector3.Dot(dashDir, mainCamera.forward);
-            bool isBackDash = forwardDot < -0.5f;
-
-            // Rotation logic: 
-            // If forward/side dash -> Face dash direction
-            // If back dash -> Face camera forward (dashing back while looking front)
-            if (isBackDash)
+else if (camFwd.sqrMagnitude > 0.001f)
             {
-                Vector3 cameraForwardFlat = mainCamera.forward;
-                cameraForwardFlat.y = 0;
-                if (cameraForwardFlat.sqrMagnitude > 0.001f)
+                if (hasInput)
                 {
-                    Quaternion targetRot = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
-                    transform.DORotateQuaternion(targetRot, 0.15f);
+                    dashDir = (camFwd * characterInput.movement.y + camRt * characterInput.movement.x).normalized;
+                }
+                else
+                {
+                    dashDir = camFwd;
+                }
+
+                if (isBackDash)
+                {
+                    // If we dash backwards, we still face forward towards the camera
+                    transform.rotation = Quaternion.LookRotation(camFwd, Vector3.up);
+                    airDashDirection = dashDir;
+                }
+                else
+                {
+                    transform.rotation = Quaternion.LookRotation(dashDir, Vector3.up);
+                    airDashDirection = dashDir;
                 }
             }
-            else if (hasMovementInput)
+            else
             {
-                Quaternion targetRot = Quaternion.LookRotation(dashDir, Vector3.up);
-                transform.DORotateQuaternion(targetRot, 0.15f);
+                // Fallback
+                if (isBackDash)
+                    airDashDirection = -transform.forward;
+                else
+                    airDashDirection = transform.forward;
             }
-
-            // Lock camera rotation during dash
-            cameraController?.SetCameraRotationLock(true);
 
             // Turn off IK during dash
             characterMovement.DisableFeetIK();
@@ -282,11 +312,18 @@ namespace Climbing
                 if (characterMovement == null || characterMovement.rb == null || isGrounded)
                     return;
 
-                float force = airDashSetting.dashForce * airDashSetting.dashCurve.Evaluate(t);
+                float baseForce = (overrideDashForce > 0) ? overrideDashForce : airDashSetting.dashForce;
+                float force = baseForce * airDashSetting.dashCurve.Evaluate(t);
+                
                 float keepY = characterMovement.rb.linearVelocity.y > 0
                     ? 0f
                     : characterMovement.rb.linearVelocity.y;
-                characterMovement.rb.linearVelocity = airDashDirection * force + new Vector3(0, keepY, 0);
+                
+                // If targeting a point, we include vertical velocity in the dash vector
+                Vector3 finalVel = airDashDirection * force;
+                if (overrideDashForce <= 0) finalVel.y = keepY;
+                
+                characterMovement.rb.linearVelocity = finalVel;
             })
             .SetEase(Ease.Linear) // Curve drives the shape; Linear keeps sampling honest
             .SetUpdate(UpdateType.Fixed)
@@ -296,10 +333,8 @@ namespace Climbing
                 characterAnimation.SetDashing(false);
                 ClearParkourState(ParkourState.Dashing);
                 characterMovement.stopMotion = false;
-                characterMovement.EnableFeetIK();
                 airDashRecoverTimer = airDashSetting.recoverTime;
                 cameraController?.SetFOVState(CameraFOVState.Walk);
-                cameraController?.SetCameraRotationLock(false);
             })
             .OnKill(() =>
             {
@@ -309,12 +344,10 @@ namespace Climbing
                 if (characterMovement != null) 
                 {
                     characterMovement.stopMotion = false;
-                    characterMovement.EnableFeetIK();
                 }
                 cameraController?.SetFOVState(CameraFOVState.Walk);
-                cameraController?.SetCameraRotationLock(false);
             });
-}
+        }
 
         private void HandleGroundDash()
         {
@@ -339,7 +372,7 @@ namespace Climbing
             if (isGroundDashing)
                 return; // Let DoTween manage velocity updates inside FixedUpdate via SetUpdate(Fixed)
 
-            if (canGroundDash && !isGroundDashRecovering && characterInput.ConsumeDoubleTapDashBuffered())
+            if (canGroundDash && !isGroundDashRecovering && (characterInput.ConsumeDoubleTapDashBuffered() || characterInput.ConsumeDashPressedBuffered()))
             {
                 PerformGroundDash();
             }
@@ -352,42 +385,66 @@ namespace Climbing
             isGroundDashing = true;
             groundDashTween?.Kill();
 
-            // Compute dash direction from camera-relative input
-            Vector3 dashDir = transform.forward;
-            bool hasMovementInput = characterInput.movement.sqrMagnitude > 0.01f;
+            // Find target parkour point - 15m range
+            Point targetPoint = FindNearestParkourPoint(15f, 45f);
 
-            if (hasMovementInput)
+            // Find if backwards input is applied
+            bool isBackDash = characterInput.movement.y < -0.1f;
+            bool hasInput = characterInput.movement.sqrMagnitude > 0.01f;
+
+            Vector3 camFwd = mainCamera.forward;
+            camFwd.y = 0;
+            camFwd.Normalize();
+
+            Vector3 camRt = mainCamera.right;
+            camRt.y = 0;
+            camRt.Normalize();
+
+            Vector3 dashDir;
+            float overrideDashForce = -1f;
+
+            if (targetPoint != null)
             {
-                freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
-                dashDir = (freeCamera.transform.forward * characterInput.movement.y
-                                     + freeCamera.transform.right  * characterInput.movement.x).normalized;
+                dashDir = (targetPoint.transform.position - transform.position).normalized;
+                float dist = Vector3.Distance(targetPoint.transform.position, transform.position);
+                overrideDashForce = Mathf.Min(dist / groundDashSetting.dashTime, 60f);
+
+                transform.rotation = Quaternion.LookRotation(new Vector3(dashDir.x, 0, dashDir.z), Vector3.up);
+groundDashDirection = dashDir;
+                isBackDash = false;
             }
-
-            groundDashDirection = dashDir;
-
-            // Backward detection
-            float forwardDot = Vector3.Dot(dashDir, mainCamera.forward);
-            bool isBackDash = forwardDot < -0.5f;
-
-            // Rotation logic
-            if (isBackDash)
+            else if (camFwd.sqrMagnitude > 0.001f)
             {
-                Vector3 cameraForwardFlat = mainCamera.forward;
-                cameraForwardFlat.y = 0;
-                if (cameraForwardFlat.sqrMagnitude > 0.001f)
+                if (hasInput)
                 {
-                    Quaternion targetRot = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
-                    transform.DORotateQuaternion(targetRot, 0.15f);
+                    dashDir = (camFwd * characterInput.movement.y + camRt * characterInput.movement.x).normalized;
+                }
+                else
+                {
+                    dashDir = camFwd;
+                }
+
+                if (isBackDash)
+                {
+                    // Back dash keeps character looking forward
+                    transform.rotation = Quaternion.LookRotation(camFwd, Vector3.up);
+                    groundDashDirection = dashDir;
+                }
+                else
+                {
+                    // Normal dashes orient the character to where they are moving
+                    transform.rotation = Quaternion.LookRotation(dashDir, Vector3.up);
+                    groundDashDirection = dashDir;
                 }
             }
-            else if (hasMovementInput)
+            else
             {
-                Quaternion targetRot = Quaternion.LookRotation(dashDir, Vector3.up);
-                transform.DORotateQuaternion(targetRot, 0.15f);
+                // Fallback
+                if (isBackDash)
+                    groundDashDirection = -transform.forward;
+                else
+                    groundDashDirection = transform.forward;
             }
-
-            // Lock camera rotation
-            cameraController?.SetCameraRotationLock(true);
 
             // Turn off IK
             characterMovement.DisableFeetIK();
@@ -406,7 +463,8 @@ namespace Climbing
                 if (characterMovement == null || characterMovement.rb == null || !isGrounded)
                     return;
 
-                float force = groundDashSetting.dashForce * groundDashSetting.dashCurve.Evaluate(t);
+                float baseForce = (overrideDashForce > 0) ? overrideDashForce : groundDashSetting.dashForce;
+                float force = baseForce * groundDashSetting.dashCurve.Evaluate(t);
                 characterMovement.rb.linearVelocity = new Vector3(
                     groundDashDirection.x * force,
                     characterMovement.rb.linearVelocity.y,
@@ -420,11 +478,9 @@ namespace Climbing
                 characterAnimation.SetDashing(false);
                 ClearParkourState(ParkourState.Dashing);
                 characterMovement.stopMotion = false;
-                characterMovement.EnableFeetIK();
                 isGroundDashRecovering = true;
                 groundDashRecoverTimer = groundDashSetting.recoverTime;
                 cameraController?.SetFOVState(CameraFOVState.Run);
-                cameraController?.SetCameraRotationLock(false);
             })
             .OnKill(() =>
             {
@@ -434,12 +490,10 @@ namespace Climbing
                 if (characterMovement != null) 
                 {
                     characterMovement.stopMotion = false;
-                    characterMovement.EnableFeetIK();
                 }
                 cameraController?.SetFOVState(CameraFOVState.Walk);
-                cameraController?.SetCameraRotationLock(false);
             });
-}
+        }
 
         /// <summary>
         /// Explicitly triggers a backward dash, pushing the player away from their current facing direction.
@@ -448,30 +502,44 @@ namespace Climbing
         {
             if (isGroundDashing || isAirDashing || !allowMovement) return;
 
+            // Prevent backdash during wallrun
+            if (wallRunController != null && wallRunController.isWallRunning) return;
+
             // Lock camera
-            cameraController?.SetCameraRotationLock(true);
+cameraController?.SetCameraRotationLock(true);
 
             // Turn off IK
             characterMovement.DisableFeetIK();
 
-            // Compute dash direction (backward relative to camera/facing)
-Vector3 dashDir;
-            if (characterInput.movement.sqrMagnitude > 0.01f)
+            // Compute dash direction (strict backward relative to camera)
+            Vector3 dashDir;
+
+            Vector3 camFwd = mainCamera.forward;
+            camFwd.y = 0;
+            camFwd.Normalize();
+
+            Vector3 camRt = mainCamera.right;
+            camRt.y = 0;
+            camRt.Normalize();
+
+            if (camFwd.sqrMagnitude > 0.001f)
             {
-                freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
-                dashDir = (freeCamera.transform.forward * characterInput.movement.y
-                         + freeCamera.transform.right  * characterInput.movement.x).normalized;
+                bool hasInput = characterInput.movement.sqrMagnitude > 0.01f;
+                if (hasInput)
+                {
+                    dashDir = (camFwd * characterInput.movement.y + camRt * characterInput.movement.x).normalized;
+                }
+                else
+                {
+                    dashDir = -camFwd; 
+                }
+
+                transform.rotation = Quaternion.LookRotation(camFwd, Vector3.up);
             }
             else
             {
                 dashDir = -transform.forward;
             }
-
-            // For explicit back dash, we definitely want to face forward
-            Vector3 cameraForwardFlat = mainCamera.forward;
-            cameraForwardFlat.y = 0;
-            if (cameraForwardFlat.sqrMagnitude > 0.001f)
-                transform.rotation = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
 
             if (isGrounded)
             {
@@ -500,13 +568,12 @@ Vector3 dashDir;
                     characterAnimation.SetDashing(false);
                     ClearParkourState(ParkourState.Dashing);
                     characterMovement.stopMotion = false;
-                    characterMovement.EnableFeetIK();
                     isGroundDashRecovering = true;
                     groundDashRecoverTimer = groundDashSetting.recoverTime;
                     cameraController?.SetFOVState(CameraFOVState.Walk);
                     cameraController?.SetCameraRotationLock(false);
-                })
-                .OnKill(() => {
+                    })
+.OnKill(() => {
                     isGroundDashing = false;
                     characterAnimation?.SetDashing(false);
                     ClearParkourState(ParkourState.Dashing);
@@ -546,12 +613,11 @@ Vector3 dashDir;
                     characterAnimation.SetDashing(false);
                     ClearParkourState(ParkourState.Dashing);
                     characterMovement.stopMotion = false;
-                    characterMovement.EnableFeetIK();
                     airDashRecoverTimer = airDashSetting.recoverTime;
                     cameraController?.SetFOVState(CameraFOVState.Walk);
                     cameraController?.SetCameraRotationLock(false);
-                })
-                .OnKill(() => {
+                    })
+.OnKill(() => {
                     isAirDashing = false;
                     characterAnimation?.SetDashing(false);
                     ClearParkourState(ParkourState.Dashing);
@@ -648,11 +714,51 @@ else
             characterMovement.Fall();
         }
 
+        public Point FindNearestParkourPoint(float maxDistance, float maxAngle)
+        {
+            Point[] allPoints = UnityEngine.Object.FindObjectsByType<Point>(FindObjectsSortMode.None);
+            Point bestPoint = null;
+            float closestDist = maxDistance;
+
+            Vector3 searchDir = transform.forward;
+            if (characterInput.movement.sqrMagnitude > 0.01f)
+            {
+                Vector3 camFwd = mainCamera.forward;
+                camFwd.y = 0;
+                camFwd.Normalize();
+                Vector3 camRt = mainCamera.right;
+                camRt.y = 0;
+                camRt.Normalize();
+                searchDir = (camFwd * characterInput.movement.y + camRt * characterInput.movement.x).normalized;
+            }
+
+            foreach (Point p in allPoints)
+            {
+                Vector3 toPoint = p.transform.position - transform.position;
+                float dist = toPoint.magnitude;
+                if (dist < closestDist)
+                {
+                    float angle = Vector3.Angle(searchDir, toPoint.normalized);
+                    if (angle < maxAngle)
+                    {
+                        closestDist = dist;
+                        bestPoint = p;
+                    }
+                }
+            }
+
+            return bestPoint;
+        }
+
         private bool OnGround()
         {
             // Add a slight cooldown before we can be considered grounded again
             // This prevents the system from immediately grounding the player while the jump is launching
             if (Time.time < lastJumpTime + 0.2f) return false;
+
+            // If we are actively wallrunning, we are NOT grounded, even if close to the floor.
+            // This prevents the wallrun from cancelling itself immediately after the 0.2s grace period.
+            if (activeParkourState == ParkourState.WallRunning) return false;
             
             return characterDetection.IsGrounded(stepHeight);
         }
@@ -687,11 +793,14 @@ else
                 characterAnimation.animator.SetFloat("TurnAngle", 0f);
 
                 // Restore FOV to current intended movement speed
-                if (characterMovement.GetState() == MovementState.Running)
-                    cameraController?.SetFOVState(CameraFOVState.Run);
-                else
-                    cameraController?.SetFOVState(CameraFOVState.Walk);
-            }
+                if (!IsParkourBusy)
+                {
+                    if (characterMovement.GetState() == MovementState.Running)
+                        cameraController?.SetFOVState(CameraFOVState.Run);
+                    else
+                        cameraController?.SetFOVState(CameraFOVState.Walk);
+                }
+}
             else
             {
                 idleTurnTimer += Time.deltaTime;

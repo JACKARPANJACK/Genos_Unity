@@ -1,0 +1,27 @@
+{
+    "asset": "076c86f33e2f6f34aa33c96d0b5f5619",
+    "fileName": "019dd4b5-2349-7eaa-90b9-ccc80370763c.png",
+    "prompt": "Glowing circular ember spark, soft edges, high intensity center, white on black background",
+    "negativePrompt": "",
+    "model": "856245a7-19a9-46f3-864c-899b31fd5f9f",
+    "modelName": "Nano Banana - T2i",
+    "customSeed": -1,
+    "w3CTraceId": "190d32430f9354ff3a85dd8699b48376",
+    "feedback": 0,
+    "refinementMode": "Generation",
+    "pixelateTargetSize": 0,
+    "pixelateKeepImageSize": false,
+    "pixelatePixelBlockSize": 0,
+    "pixelateMode": 0,
+    "pixelateOutlineThickness": 0,
+    "doodles": {
+        "m_Items": []
+    },
+    "upscaleFactor": 0,
+    "dimensions": {
+        "width": 1024,
+        "height": 1024
+    },
+    "spriteSheet": false,
+    "duration": 0.0
+}

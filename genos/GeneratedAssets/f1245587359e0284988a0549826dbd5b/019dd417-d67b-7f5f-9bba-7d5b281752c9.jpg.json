@@ -1,0 +1,27 @@
+{
+    "asset": "f1245587359e0284988a0549826dbd5b",
+    "fileName": "019dd417-d67b-7f5f-9bba-7d5b281752c9.jpg",
+    "prompt": "Stylized anime thruster core, bright cyan and light blue glowing oval, high energy, painterly digital art style, transparent background, isolated.",
+    "negativePrompt": "",
+    "model": "f722aea3-8760-4eb1-a516-e2fce6476303",
+    "modelName": "Seedream 4",
+    "customSeed": -1,
+    "w3CTraceId": "358ae6db4b40ae0130e2ae67a3f66511",
+    "feedback": 0,
+    "refinementMode": "Generation",
+    "pixelateTargetSize": 0,
+    "pixelateKeepImageSize": false,
+    "pixelatePixelBlockSize": 0,
+    "pixelateMode": 0,
+    "pixelateOutlineThickness": 0,
+    "doodles": {
+        "m_Items": []
+    },
+    "upscaleFactor": 0,
+    "dimensions": {
+        "width": 1024,
+        "height": 1024
+    },
+    "spriteSheet": false,
+    "duration": 0.0
+}

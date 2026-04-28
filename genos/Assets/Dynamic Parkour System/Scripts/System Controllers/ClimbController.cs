@@ -1,4 +1,4 @@
-﻿/*
+/*
 MIT License
 
 Copyright (c) 2023 Èric Canela
@@ -167,13 +167,18 @@ namespace Climbing
         public bool ClimbCheck()
         {
             active = false;
-            if (!characterController.dummy && characterController.isGrounded)
+            bool isWallRunning = characterController.HasParkourState(ParkourState.WallRunning);
+            
+            // Allow grabbing ledges if grounded OR in the air (including wallrunning)
+            if (!characterController.dummy)
             {
                 onLedge = false;
                 RaycastHit hit;
-                if (characterController.WantsAutoParkour() && !toLedge && !onLedge && !characterController.IsParkourBusy)
+                
+                // If in air, we always check if we can grab a ledge if we have forward input
+                if (characterController.WantsAutoParkour() && !toLedge && !onLedge && (!characterController.IsParkourBusy || isWallRunning))
                 {
-                    //Throw Raycast to find Ledges
+//Throw Raycast to find Ledges
                     ledgeFound = characterDetection.FindLedgeCollision(out hit);
 
                     if (ledgeFound)
@@ -397,25 +402,24 @@ namespace Climbing
 
             characterAnimation.HangMovement(direction.x, (int)curClimbState); //Move on Ledge Animations
 
-            //Only allow to jump to another ledge if is on Hanging Movement
-            bool wantsParkour = characterController.WantsParkourTraversal();
+            // Check for Jump key to trigger ledge-to-ledge jumps or launches
+            bool jumpPressed = characterController.characterInput.ConsumeJumpPressedBuffered();
 
-            if (wantsParkour && characterAnimation.animState.IsName("Hanging Movement"))
+            if (jumpPressed && (characterAnimation.animState.IsName("Hanging Movement") || characterAnimation.animState.IsTag("Hanging")))
             {
                 bool drop = characterController.characterInput.movement.y < -0.25f;
 
-                //Check if can climb on surface
+                // Check if can climb on surface (mantle up)
                 bool climbing = false;
                 if (characterController.characterInput.movement.y > 0.8f && characterController.characterInput.movement.x < 0.3 && characterController.characterInput.movement.x > -0.3 && onLedge)
                     climbing = ClimbFromLedge();
 
-                if (wallFound && !climbing)
+                if (!climbing)
                 {
                     JumpToLedge(characterController.characterInput.movement.x, characterController.characterInput.movement.y, drop);
                 }
-
             }
-        }
+}
 
         /// <summary>
         /// Climbs From Ledge to Upwards Surface
@@ -509,7 +513,49 @@ namespace Climbing
 
                     characterController.characterAnimation.LedgeToLedge(curClimbState, direction, ref startTime, ref endTime);
                 }
+                else if (characterController.characterInput.run && !drop && vertical > -0.1f)
+                {
+                    // POINT LAUNCH: If no point found but player is running/jumping away
+                    PerformPointLaunchAway(horizontal, vertical);
+                }
             }
+        }
+
+        private void PerformPointLaunchAway(float h, float v)
+        {
+            // Calculate launch direction: away from wall + input direction
+            Vector3 camFwd = characterController.mainCamera.forward;
+            camFwd.y = 0; camFwd.Normalize();
+            Vector3 camRt = characterController.mainCamera.right;
+            camRt.y = 0; camRt.Normalize();
+
+            Vector3 launchDir = (camFwd * v + camRt * h).normalized;
+            if (launchDir.sqrMagnitude < 0.1f) launchDir = -transform.forward;
+
+            // Apply a strong impulse
+            float launchForce = 18f;
+            float launchUpForce = 8f;
+
+            wallFound = false;
+            curLedge = null;
+            onLedge = false;
+            targetPoint = null;
+            currentPoint = null;
+            characterController.isJumping = true;
+            curClimbState = ClimbState.None;
+            characterAnimation.DropLedge((int)curClimbState);
+
+            characterController.EnableController();
+            characterController.ResetJumpTime();
+            
+            characterController.characterMovement.rb.linearVelocity = (launchDir * launchForce) + (Vector3.up * launchUpForce);
+            characterAnimation.animator.CrossFade("Predicted Jump", 0.1f);
+            
+            // Explicitly disable IK for the launch duration
+            characterController.characterMovement.DisableFeetIK();
+
+            characterController.cameraController?.SetFOVState(CameraFOVState.AirDash);
+            characterController.cameraController?.ShakeMedium();
         }
 
         /// <summary>

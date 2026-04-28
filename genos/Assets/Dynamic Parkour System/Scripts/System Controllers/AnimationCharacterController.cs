@@ -203,16 +203,61 @@ namespace Climbing
 
         public void SetWallRunning(bool state, float side = 0f)
         {
-            animator.SetBool("IsWallRunning", state);
+            SafeSetBool("IsWallRunning", state);
             if (state)
             {
-                animator.SetFloat("WallRunSide", side);
+                SafeSetFloat("WallRunSide", side);
             }
         }
 
         public void UpdateWallRunSide(float side)
         {
-            animator.SetFloat("WallRunSide", side);
+            SafeSetFloat("WallRunSide", side);
+        }
+
+        private void SafeSetBool(string paramName, bool value)
+        {
+            if (animator == null) return;
+            foreach (var p in animator.parameters)
+            {
+                if (p.name == paramName)
+                {
+                    animator.SetBool(paramName, value);
+                    return;
+                }
+            }
+        }
+
+        private void SafeSetFloat(string paramName, float value)
+        {
+            if (animator == null) return;
+            foreach (var p in animator.parameters)
+            {
+                if (p.name == paramName)
+                {
+                    animator.SetFloat(paramName, value);
+                    return;
+                }
+            }
+        }
+
+        private void SafeSetInt(string paramName, int value)
+        {
+            if (animator == null) return;
+            foreach (var p in animator.parameters)
+            {
+                if (p.name == paramName)
+                {
+                    animator.SetInteger(paramName, value);
+                    return;
+                }
+            }
+        }
+
+        public bool HasState(string stateName, int layer = 0)
+        {
+            if (animator == null) return false;
+            return animator.HasState(layer, Animator.StringToHash(stateName));
         }
 
         public void SetMatchTarget(AvatarTarget avatarTarget, Vector3 targetPos, Quaternion targetRot, Vector3 offset, float startnormalizedTime, float targetNormalizedTime)

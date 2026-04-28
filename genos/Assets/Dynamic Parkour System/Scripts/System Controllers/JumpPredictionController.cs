@@ -1,4 +1,4 @@
-﻿/*
+/*
 MIT License
 
 Copyright (c) 2023 Èric Canela
@@ -91,7 +91,8 @@ namespace Climbing
                 controller.characterMovement.limitMovement &&
                 !controller.IsParkourBusy)
             {
-                if (controller.WantsAutoParkour() && controller.characterInput.movement != Vector2.zero)
+                // Explicitly use Jump key for point navigation/launch
+                if (controller.characterInput.ConsumeJumpPressedBuffered())
                 {
                     List<HandlePoints> points = new List<HandlePoints>();
                     controller.characterDetection.FindAheadPoints(ref points);
@@ -104,10 +105,15 @@ namespace Climbing
 
                     //Gets direction relative to the input and the camera
                     Vector3 mov = new Vector3(controller.characterInput.movement.x, 0, controller.characterInput.movement.y);
+                    if (mov.sqrMagnitude < 0.01f) mov = Vector3.forward;
+
                     Vector3 inputDir = controller.RotateToCameraDirection(mov) * Vector3.forward;
 
                     if (showDebug)
-                        Debug.DrawLine(transform.position, transform.position + inputDir);
+                    {
+                        Debug.DrawLine(transform.position, transform.position + inputDir, Color.blue, 2f);
+                        Debug.Log($"[JumpPrediction] Jump pressed. SearchDir: {inputDir}");
+                    }
 
                     //Get below point for reference as first point
                     if (fp == null)
@@ -141,20 +147,13 @@ namespace Climbing
                                     continue;
 
                                 Vector3 targetDirection = point.transform.position - transform.position;
-
                                 Vector3 d1 = new Vector3(targetDirection.x, 0, targetDirection.z);
-
                                 float dot = Vector3.Dot(d1.normalized, inputDir.normalized);
 
-                                if (fp == null)//First Point
-                                {
-                                    fp = point;
-                                }
+                                if (fp == null) fp = point;
+                                if (fp.transform.parent == point.transform.parent) continue;
 
-                                if (fp.transform.parent == point.transform.parent)
-                                    continue;
-
-                                if (dot > 0.9 && targetDirection.sqrMagnitude < minDist && minRange - dot < 0.1f )
+                                if (dot > 0.8f && targetDirection.sqrMagnitude < minDist && minRange - dot < 0.1f)
                                 {
                                     p = point;
                                     minRange = dot;
@@ -165,14 +164,15 @@ namespace Climbing
                         }
                     }
 
-                    bool target = false;
+                    bool targetFound = false;
 
                     //Creates a new Jump to Landing Point
                     if (newPoint && p != null)
                     {
-                        target = SetParabola(transform.position, p.transform.position);
-                        if (target)
+                        targetFound = SetParabola(transform.position, p.transform.position);
+                        if (targetFound)
                         {
+                            if (showDebug) Debug.Log($"[JumpPrediction] Target locked: {p.name}");
                             curPoint = p;
 
                             switch (curPoint.type)
@@ -193,45 +193,39 @@ namespace Climbing
                         }
                     }
 
-                    //Creates a new Jump in case of not finding a Landing Point
-                    if (!target)
+                    // POINT LAUNCH fallback
+                    if (!targetFound)
                     {
-                        Vector3 end = transform.position + inputDir * 4;
-
-                        RaycastHit hit;
-                        if(controller.characterDetection.ThrowRayOnDirection(transform.position, inputDir, 4, out hit))
-                        {
-                            Vector3 temp = hit.point;
-                            temp.y = transform.position.y;
-                            Vector3 dist = temp - transform.position;
-
-                            if(dist.sqrMagnitude >= 2)
-                            {   
-                                end = hit.point + hit.normal * (controller.slidingCapsuleCollider.radius * 2);
-                            }
-                            else
-                            {
-                                end = Vector3.zero;
-                            }
-                        }
-
-                        if (end != Vector3.zero)
-                        {
-                            if(SetParabola(transform.position, end))
-                            {
-                                controller.characterAnimation.JumpPrediction(false);
-                                curPoint = null;
-                                controller.characterMovement.stopMotion = true;
-                                controller.DisableController();
-                                controller.isJumping = true;
-                            }
-                        }
+                        if (showDebug) Debug.Log("[JumpPrediction] No valid point neighbor found. Launching away.");
+                        PerformPoleLaunch(inputDir);
                     }
 
                     points.Clear();
                 }
             }
         }
+
+                    private void PerformPoleLaunch(Vector3 direction)
+                    {
+                        curPoint = null;
+                        controller.EnableController();
+                        controller.ResetJumpTime();
+            
+                        float launchForce = 22f;
+                        float launchUpForce = 6f;
+
+                        controller.characterMovement.rb.linearVelocity = (direction * launchForce) + (Vector3.up * launchUpForce);
+                        controller.characterAnimation.animator.CrossFade("Predicted Jump", 0.1f);
+            
+                        // Aggressively disable IK for launch
+                        controller.characterMovement.DisableFeetIK();
+
+                        controller.cameraController?.SetFOVState(CameraFOVState.AirDash);
+                        controller.cameraController?.ShakeMedium();
+            
+                        move = false;
+                        actualSpeed = 0;
+                    }
 
         /// <summary>
         /// While being on a pole check for next point to land
@@ -254,15 +248,10 @@ namespace Climbing
 
                     controller.characterMovement.ResetSpeed();
 
-                    //Check near points while OnPole
-                    if (curPoint && !controller.isJumping)
+                    // Check for jump/launch immediately while perched
+                    if (!controller.isJumping)
                     {
-                        //Delay between allowing new jump
-                        if (delay < 0.1f)
-                            delay += Time.deltaTime;
-                        else
-                            CheckJump();
-
+                        CheckJump();
                         return true;
                     }
                 }

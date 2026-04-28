@@ -1,4 +1,4 @@
-﻿/*
+/*
 MIT License
 
 Copyright (c) 2023 Èric Canela
@@ -93,9 +93,11 @@ namespace Climbing
 
                 if (!controller.isGrounded)
                 {
-                    Fall();
+                    // Do not enter fall state if actively wallrunning
+                    if (controller.activeParkourState != ParkourState.WallRunning)
+                        Fall();
                 }
-                else if (controller.isGrounded && controller.onAir)
+else if (controller.isGrounded && controller.onAir)
                 {
                     Landed();
                 }
@@ -151,35 +153,47 @@ namespace Climbing
 
             if (velocity.magnitude > 0.3f)
             {
-                //Applies Input Movement to the RigidBody
-                smoothSpeed = Mathf.Lerp(smoothSpeed, curSpeed, Time.fixedDeltaTime * 2);
-                rb.linearVelocity = new Vector3(velocity.x * smoothSpeed, velocity.y * smoothSpeed + rb.linearVelocity.y, velocity.z * smoothSpeed);
-
-                //Detect Player on Irregular Surface and adjust movement to avoid slowing down and undesired jumps
-                RaycastHit hit;
-                controller.characterDetection.ThrowRayOnDirection(transform.position, Vector3.down, 1.0f, out hit);
-                if (hit.normal != Vector3.up)
+                if (controller.isGrounded)
                 {
-                    controller.inSlope = true;
-                    rb.linearVelocity += -new Vector3(hit.normal.x, 0, hit.normal.z) * 1.0f;
-                    rb.linearVelocity = rb.linearVelocity + Vector3.up * Physics.gravity.y * 1.6f * Time.fixedDeltaTime;
+                    // Applies Input Movement to the RigidBody
+                    smoothSpeed = Mathf.Lerp(smoothSpeed, curSpeed, Time.fixedDeltaTime * 4);
+                    rb.linearVelocity = new Vector3(velocity.x * smoothSpeed, rb.linearVelocity.y, velocity.z * smoothSpeed);
+
+                    // Detect Player on Irregular Surface
+                    RaycastHit hit;
+                    controller.characterDetection.ThrowRayOnDirection(transform.position, Vector3.down, 1.0f, out hit);
+                    if (hit.normal != Vector3.up)
+                    {
+                        controller.inSlope = true;
+                        rb.linearVelocity += -new Vector3(hit.normal.x, 0, hit.normal.z) * 1.0f;
+                        rb.linearVelocity = rb.linearVelocity + Vector3.up * Physics.gravity.y * 1.6f * Time.fixedDeltaTime;
+                    }
+                    else
+                    {
+                        controller.inSlope = false;
+                    }
+
+                    AutoStep();
                 }
                 else
                 {
-                    controller.inSlope = false;
+                    // Allow limited air-strafing without overwriting impulsive momentum 
+                    Vector3 airVel = new Vector3(velocity.x, 0, velocity.z) * curSpeed * 0.5f;
+                    rb.AddForce(airVel, ForceMode.Acceleration);
                 }
 
-                //If player fins Small Obstacle Auto Steps it without affecting the movement
-                AutoStep();
-
-                //Sets velocity for movement animations
                 controller.characterAnimation.SetAnimVelocity(rb.linearVelocity);
             }
             else
             {
-                //Lerp down with current velocity of the rigidbody when no input detected
-                smoothSpeed = Mathf.SmoothStep(smoothSpeed, 0, Time.fixedDeltaTime * 20);
-                rb.linearVelocity = new Vector3(rb.linearVelocity.normalized.x * smoothSpeed, rb.linearVelocity.y, rb.linearVelocity.normalized.z * smoothSpeed);
+                if (controller.isGrounded)
+                {
+                    // Lerp down with current velocity of the rigidbody when no input detected
+                    smoothSpeed = Mathf.SmoothStep(smoothSpeed, 0, Time.fixedDeltaTime * 15);
+                    Vector3 horizontalVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+                    horizontalVelocity = horizontalVelocity.normalized * smoothSpeed;
+                    rb.linearVelocity = new Vector3(horizontalVelocity.x, rb.linearVelocity.y, horizontalVelocity.z);
+                }
                 controller.characterAnimation.SetAnimVelocity(controller.characterAnimation.GetAnimVelocity().normalized * smoothSpeed);
             }
 
@@ -317,12 +331,17 @@ namespace Climbing
 
         public void EnableFeetIK()
         {
+            // Do not re-enable if we are in a state that should not have IK
+            // This prevents snapping when a script tries to re-enable IK before the animation transition finishes.
+            if (controller != null && (controller.IsParkourBusy || controller.isVaulting))
+                return;
+
             enableFeetIK = true;
             lastPelvisPositionY = 0;
             leftFootIKPosition = Vector3.zero;
             rightFootIKPosition = Vector3.zero;
         }
-        public void DisableFeetIK()
+public void DisableFeetIK()
         {
             enableFeetIK = false;
             lastPelvisPositionY = 0;
@@ -354,8 +373,41 @@ namespace Climbing
 
         private void OnAnimatorIK(int layerIndex)
         {
-            if (!enableFeetIK || controller.dummy || anim == null)
+            // Aggressive disable for parkour or specific states
+            bool isParkourActive = controller.IsParkourBusy || controller.isVaulting;
+            
+            // Check current layer's state for dash/wallrun/slide to prevent IK snapping during transitions
+            AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(layerIndex);
+            bool isRestrictedState = state.IsName("Dash") || state.IsName("Dash_BWD") || 
+                                     state.IsName("Vault Slide") || state.IsName("Slide") || 
+                                     state.IsName("Running Slide") || state.IsName("WallRun") ||
+                                     state.IsName("Wallrun") || state.IsName("WallRunning") || 
+                                     state.IsName("Predicted Jump") || state.IsName("Wall Kick") ||
+                                     state.IsTag("NoIK") || state.IsTag("Vault");
+
+            bool shouldDisableIK = !enableFeetIK || controller.dummy || anim == null || 
+                                   isParkourActive || isRestrictedState;
+
+            if (shouldDisableIK)
+            {
+                if (anim != null)
+                {
+                    // Zero out all limb IK to prevent distorted poses during high-mobility states
+                    anim.SetIKPositionWeight(AvatarIKGoal.LeftFoot, 0);
+                    anim.SetIKRotationWeight(AvatarIKGoal.LeftFoot, 0);
+                    anim.SetIKPositionWeight(AvatarIKGoal.RightFoot, 0);
+                    anim.SetIKRotationWeight(AvatarIKGoal.RightFoot, 0);
+                    
+                    anim.SetIKPositionWeight(AvatarIKGoal.LeftHand, 0);
+                    anim.SetIKRotationWeight(AvatarIKGoal.LeftHand, 0);
+                    anim.SetIKPositionWeight(AvatarIKGoal.RightHand, 0);
+                    anim.SetIKRotationWeight(AvatarIKGoal.RightHand, 0);
+
+                    // Stop pelvis adjustment and cache current position to prevent snapping on re-enable
+                    lastPelvisPositionY = anim.bodyPosition.y;
+                }
                 return;
+            }
 
             MovePelvisHeight();
 

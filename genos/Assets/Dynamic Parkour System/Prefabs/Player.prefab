@@ -1074,7 +1074,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93e4e8fc79c695540bc086f95f326b45, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  showDebug: 0
+  showDebug: 1
   rb: {fileID: 0}
   limitMovement: 0
   stopMotion: 0
@@ -1230,21 +1230,21 @@ MonoBehaviour:
     dutchBlendTime: 0.2
     dutchEase: 3
   wallRunProfile:
-    fieldOfView: 80
+    fieldOfView: 50
     fovBlendTime: 0.25
     fovEase: 9
     dutch: 14
     dutchBlendTime: 0.2
     dutchEase: 3
   parkourProfile:
-    fieldOfView: 60
+    fieldOfView: 40
     fovBlendTime: 0.2
     fovEase: 6
     dutch: 0
     dutchBlendTime: 0.2
     dutchEase: 3
   airDashProfile:
-    fieldOfView: 60
+    fieldOfView: 40
     fovBlendTime: 0.12
     fovEase: 18
     dutch: 0
@@ -1294,8 +1294,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 512
   wallRunTag: WallRunnable
-  wallCheckDistance: 1.2
-  sphereCastRadius: 0.45
+  wallCheckDistance: 2
+  sphereCastRadius: 2
   minJumpHeight: 0.5
   raycastYOffset: 1
   modelRotationSpeed: 15

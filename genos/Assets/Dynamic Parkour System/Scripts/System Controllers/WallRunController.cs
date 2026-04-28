@@ -19,13 +19,13 @@ namespace Climbing
         public Transform characterModel;
 
         [Header("Titanfall Physics")]
-        public float wallRunSpeedBase = 13.5f;
-        public float wallRunSpeedMax = 28f;
-        public float wallRunAcceleration = 8f;
-        public float wallGravity = 3.0f;
-        public float wallStickyForce = 40f;
+        public float wallRunSpeedBase = 16.5f;
+        public float wallRunSpeedMax = 32f;
+        public float wallRunAcceleration = 12f;
+        public float wallGravity = 1.8f;
+        public float wallStickyForce = 60f;
 public float maxWallRunTime = 4.0f;
-        public float wallRunCooldown = 0.25f;
+        public float wallRunCooldown = 0.2f;
         
         [Header("Wall Kick")]
         public float wallKickForce = 22f;
@@ -57,12 +57,18 @@ public float maxWallRunTime = 4.0f;
         private Vector3 wallNormal;
         private float wallRunTimer;
         private float currentWallRunSpeed;
+        private float currentWallDistance;
+        private const float probeOffset = 0.8f; // Probe is offset 0.8m AWAY from player center
+        private const float targetWallDistance = 1.22f; // Probe origin to wall surface (0.8m offset + 0.42m character radius)
+
+        private ClimbController climbController;
 
         private void Awake()
         {
             thirdPersonController = GetComponent<ThirdPersonController>();
             characterMovement = GetComponent<MovementCharacterController>();
             characterInput = GetComponent<InputCharacterController>();
+            climbController = GetComponent<ClimbController>();
         }
 
         private void Start()
@@ -87,23 +93,31 @@ public float maxWallRunTime = 4.0f;
             if (thirdPersonController.IsParkourBusy && !thirdPersonController.HasParkourState(ParkourState.WallRunning))
                 return;
 
-            // Shift must be held to start or stay on a wall
-            if (!characterInput.run)
-            {
-                if (isWallRunning) StopWallRun();
-                return;
-            }
-
             CheckForWall();
 
             if (isWallRunning)
             {
+                if (climbController != null && climbController.ClimbCheck())
+                {
+                    if (thirdPersonController.characterDetection.showDebug) Debug.Log("[WallRun] Stopping: Transition to Ledge Grab.");
+                    StopWallRun(startCooldown: false);
+                    return;
+                }
+
                 wallRunTimer += Time.deltaTime;
 
-                // Exit conditions: time limit, grounded
-                if (wallRunTimer >= maxWallRunTime || thirdPersonController.isGrounded)
+                if (wallRunTimer >= maxWallRunTime)
                 {
+                    if (thirdPersonController.characterDetection.showDebug) Debug.Log("[WallRun] Stopping: Max time reached.");
                     StopWallRun();
+                }
+                else if (thirdPersonController.characterDetection.IsGrounded(0.2f) && wallRunTimer > 0.5f)
+                {
+                    if (characterMovement.rb.linearVelocity.y <= 0.1f)
+                    {
+                        if (thirdPersonController.characterDetection.showDebug) Debug.Log("[WallRun] Stopping: Player is grounded.");
+                        StopWallRun();
+                    }
                 }
                 else if (characterInput.ConsumeJumpPressedBuffered())
                 {
@@ -114,10 +128,7 @@ public float maxWallRunTime = 4.0f;
 
         private bool IsValidWall(Collider col)
         {
-            // Allow re-sticking to the same wall if we are already wallrunning (to stay on it)
-            // But prevent immediate re-sticking after a jump/kick from the same wall.
             if (!isWallRunning && col == lastWall && !thirdPersonController.isGrounded) return false;
-            
             if (string.IsNullOrEmpty(wallRunTag)) return true;
             return col.CompareTag(wallRunTag);
         }
@@ -127,146 +138,244 @@ public float maxWallRunTime = 4.0f;
             if (thirdPersonController.isGrounded && !isWallRunning)
             {
                 lastWall = null; 
-                return;
             }
+
             if (!canWallRun) return;
 
             Vector3 rayOrigin = transform.position + (Vector3.up * raycastYOffset);
-
             bool wallFound = false;
-            RaycastHit hit;
+            RaycastHit bestHit = new RaycastHit();
 
-            // forgiving distance
-            float checkDist = isWallRunning ? wallCheckDistance + 0.8f : wallCheckDistance;
+            float checkDist = isWallRunning ? wallCheckDistance + 2.5f : wallCheckDistance;
 
-            // Search priority: Check current direction first if already running
+            // Maintenance Phase: Stay on current wall using a robust SphereCast fan
             if (isWallRunning)
             {
-                Vector3 checkDir = (currentDir == WallRunDirection.Right) ? transform.right : ((currentDir == WallRunDirection.Left) ? -transform.right : transform.forward);
-                if (Physics.SphereCast(rayOrigin, sphereCastRadius * 1.2f, checkDir, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
+                Vector3[] stickDirections = {
+                    -wallNormal,
+                    (Quaternion.AngleAxis(45, Vector3.up) * -wallNormal).normalized,
+                    (Quaternion.AngleAxis(-45, Vector3.up) * -wallNormal).normalized,
+                    (Quaternion.AngleAxis(30, transform.right) * -wallNormal).normalized,
+                    (Quaternion.AngleAxis(-30, transform.right) * -wallNormal).normalized
+                };
+
+                foreach (Vector3 probeDir in stickDirections)
                 {
-                    wallNormal = hit.normal;
-                    wallFound = true;
+                    // Start probe offset away from wall looking in to avoid 'initial overlap'
+                    Vector3 offsetOrigin = rayOrigin + (wallNormal * probeOffset);
+                    if (Physics.SphereCast(offsetOrigin, sphereCastRadius * 0.8f, probeDir, out RaycastHit hit, checkDist, wallLayer) && IsValidWall(hit.collider))
+                    {
+                        bestHit = hit;
+                        currentWallDistance = hit.distance;
+                        wallFound = true;
+                        break;
+                    }
+                }
+
+                if (!wallFound && currentDir == WallRunDirection.Up)
+                {
+                    Vector3 lowerRayOrigin = transform.position + (Vector3.up * 0.4f);
+                    if (Physics.Raycast(lowerRayOrigin, transform.forward, out RaycastHit lowerHit, checkDist + 0.5f, wallLayer) && IsValidWall(lowerHit.collider))
+                    {
+                        WallMantle();
+                        return;
+                    }
                 }
             }
 
             if (!wallFound)
             {
-                // General detection
-                if (Physics.SphereCast(rayOrigin, sphereCastRadius, transform.right, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
+                Vector3[] searchDirs = {
+                    transform.right,
+                    -transform.right,
+                    (transform.forward + transform.right).normalized,
+                    (transform.forward - transform.right).normalized,
+                    transform.forward,
+                    (transform.forward + transform.right * 1.5f).normalized,
+                    (transform.forward - transform.right * 1.5f).normalized
+                };
+
+                foreach (Vector3 dir in searchDirs)
                 {
-                    wallNormal = hit.normal;
-                    currentDir = WallRunDirection.Right;
-                    wallFound = true;
-                    lastWall = hit.collider;
-                }
-                else if (Physics.SphereCast(rayOrigin, sphereCastRadius, -transform.right, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
-                {
-                    wallNormal = hit.normal;
-                    currentDir = WallRunDirection.Left;
-                    wallFound = true;
-                    lastWall = hit.collider;
-                }
-                else if (Physics.SphereCast(rayOrigin, sphereCastRadius, transform.forward, out hit, checkDist, wallLayer) && IsValidWall(hit.collider))
-                {
-                    wallNormal = hit.normal;
-                    currentDir = WallRunDirection.Up;
-                    wallFound = true;
-                    lastWall = hit.collider;
+                    if (dir == transform.forward && thirdPersonController.isGrounded) continue;
+                    if (Physics.SphereCast(rayOrigin, sphereCastRadius, dir, out RaycastHit hit, wallCheckDistance, wallLayer) && IsValidWall(hit.collider))
+                    {
+                        bestHit = hit;
+                        wallFound = true;
+                        break;
+                    }
                 }
             }
 
             if (wallFound)
             {
+                // Capture distance for position correction logic
+                currentWallDistance = bestHit.distance;
+
+                // Aggressively blend normal to handle curved walls and jitter
+                if (wallNormal == Vector3.zero) wallNormal = bestHit.normal.normalized;
+                else wallNormal = Vector3.Slerp(wallNormal, bestHit.normal.normalized, Time.deltaTime * 20f);
+
+                lastWall = bestHit.collider;
+
+                Vector3 localHit = transform.InverseTransformPoint(bestHit.point);
+                float fwdDot = Vector3.Dot(wallNormal, transform.forward);
+
+                if (fwdDot < -0.7f && !thirdPersonController.isGrounded)
+                {
+                    currentDir = WallRunDirection.Up;
+                }
+                else if (localHit.x < 0)
+                {
+                    currentDir = WallRunDirection.Left;
+                }
+                else
+                {
+                    currentDir = WallRunDirection.Right;
+                }
+
                 if (!isWallRunning) StartWallRun();
             }
             else if (isWallRunning)
             {
+                if (thirdPersonController.characterDetection.showDebug) Debug.Log("[WallRun] Stopping: Wall lost.");
                 StopWallRun();
             }
         }
 
         private void StartWallRun()
         {
+            if (currentDir == WallRunDirection.None) return;
+            float sideVal = (currentDir == WallRunDirection.Left) ? -1f : (currentDir == WallRunDirection.Right ? 1f : 0f);
+
             if (!thirdPersonController.TrySetParkourState(ParkourState.WallRunning)) return;
+
+            if (thirdPersonController.characterDetection.showDebug)
+                Debug.Log($"[WallRun] Starting wallrun. Direction: {currentDir}, SideVal: {sideVal}, Normal: {wallNormal}");
 
             isWallRunning = true;
             wallRunTimer = 0f;
-
-            // Prevent standard movement from interfering
             characterMovement.stopMotion = true;
 
-            // Maintain entry momentum
+            thirdPersonController.isJumping = false;
+            thirdPersonController.onAir = true;
+
             Vector3 horizontalVel = new Vector3(characterMovement.rb.linearVelocity.x, 0, characterMovement.rb.linearVelocity.z);
-currentWallRunSpeed = Mathf.Max(horizontalVel.magnitude, wallRunSpeedBase);
-            currentWallRunSpeed = Mathf.Min(currentWallRunSpeed + 2f, wallRunSpeedMax); // Slight entry boost
+            currentWallRunSpeed = Mathf.Clamp(horizontalVel.magnitude, wallRunSpeedBase, wallRunSpeedMax);
 
             characterMovement.rb.useGravity = false;
-            
-            // Initial vertical adjustment
-            float yVel = characterMovement.rb.linearVelocity.y;
-            characterMovement.rb.linearVelocity = new Vector3(characterMovement.rb.linearVelocity.x, Mathf.Max(yVel * 0.5f, 0), characterMovement.rb.linearVelocity.z);
+            characterMovement.DisableFeetIK();
+
+            float startY = characterMovement.rb.linearVelocity.y;
+            characterMovement.rb.linearVelocity = new Vector3(characterMovement.rb.linearVelocity.x, Mathf.Clamp(startY, -0.5f, 2.5f), characterMovement.rb.linearVelocity.z);
 
             SwapColliders(true);
 
-            // Camera Effects
             thirdPersonController.cameraController?.SetFOVState(CameraFOVState.WallRun);
-            float tilt = currentDir == WallRunDirection.Left ? -20f : (currentDir == WallRunDirection.Right ? 20f : 0f);
-            thirdPersonController.cameraController?.SetWallRunTilt(tilt);
+            thirdPersonController.cameraController?.SetWallRunTilt(sideVal * 20f);
 
             if (thirdPersonController.characterAnimation != null)
             {
-                float side = currentDir == WallRunDirection.Left ? -1f : (currentDir == WallRunDirection.Right ? 1f : 0f);
-                thirdPersonController.characterAnimation.SetWallRunning(true, side);
+                thirdPersonController.characterAnimation.SetWallRunning(true, sideVal);
+                if (thirdPersonController.characterAnimation.HasState("Wallrun"))
+                {
+                    thirdPersonController.characterAnimation.animator.CrossFade("Wallrun", 0.1f);
+                }
+                else if (thirdPersonController.characterAnimation.HasState("Wall Run"))
+                {
+                    thirdPersonController.characterAnimation.animator.CrossFade("Wall Run", 0.1f);
+                }
             }
-            }
+        }
 
-            private void ApplyWallRunPhysics()
+        private void ApplyWallRunPhysics()
         {
             Rigidbody rb = characterMovement.rb;
-            
-            // Accelerate over time
             currentWallRunSpeed = Mathf.MoveTowards(currentWallRunSpeed, wallRunSpeedMax, wallRunAcceleration * Time.fixedDeltaTime);
 
-            // Vector parallel to the wall and the floor
-            Vector3 wallForward = Vector3.Cross(wallNormal, Vector3.up).normalized;
-            if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
+            Vector3 camFwd = thirdPersonController.mainCamera.forward;
+            camFwd.y = 0; camFwd.Normalize();
+            Vector3 camRt = thirdPersonController.mainCamera.right;
+            camRt.y = 0; camRt.Normalize();
+            
+            Vector3 inputDir = (camFwd * characterInput.movement.y + camRt * characterInput.movement.x).normalized;
+            if (characterInput.movement.sqrMagnitude < 0.01f) inputDir = transform.forward;
+
+            Vector3 finalVelocity;
 
             if (currentDir == WallRunDirection.Up)
             {
-                // Vertical wallrun (climb)
-                Vector3 targetVel = Vector3.up * currentWallRunSpeed;
-                // Add a small push into the wall to stay attached
-                targetVel += -wallNormal * 4f; 
-                rb.linearVelocity = targetVel;
+                Vector3 projectedInput = Vector3.ProjectOnPlane(inputDir, wallNormal).normalized;
+                Vector3 wallUp = Vector3.ProjectOnPlane(Vector3.up, wallNormal).normalized;
+                Vector3 moveDir = (wallUp + projectedInput * 0.35f).normalized;
+                finalVelocity = moveDir * currentWallRunSpeed;
             }
             else
             {
-                // Horizontal wallrun
+                Vector3 wallTangent = Vector3.Cross(wallNormal, Vector3.up).normalized;
+                if (Vector3.Dot(inputDir, wallTangent) < 0) wallTangent = -wallTangent;
+                
                 float currentY = rb.linearVelocity.y;
                 currentY -= wallGravity * Time.fixedDeltaTime;
 
-                // Combine forward movement along wall with gravitational fall
-                Vector3 targetVel = (wallForward * currentWallRunSpeed) + (Vector3.up * currentY);
-                
-                // STICKY FORCE: Push harder into the wall normal
-                targetVel += -wallNormal * 6f;
-
-                rb.linearVelocity = targetVel;
+                finalVelocity = (wallTangent * currentWallRunSpeed) + (Vector3.up * currentY);
             }
-}
+
+            // SNAPPY LATERAL CORRECTION (STICKINESS):
+            // targetWallDistance is 1.22m (0.8m probe offset + ~0.42m character radius).
+            // We use the distance from the offset probe to target exactly that distance from the face.
+            float lateralError = currentWallDistance - targetWallDistance;
+            Vector3 horizontalNormal = new Vector3(wallNormal.x, 0, wallNormal.z).normalized;
+            
+            // Correction: strongly pull character to exactly the target distance
+            float correctionVelocity = -lateralError * 16f; 
+            correctionVelocity = Mathf.Clamp(correctionVelocity, -10f, 10f);
+
+            rb.linearVelocity = finalVelocity + (horizontalNormal * correctionVelocity);
+            }
 
         private void WallKick()
+        {
+            bool isLaunch = characterInput.run;
+            StopWallRun(startCooldown: false);
+
+            Rigidbody rb = characterMovement.rb;
+            Vector3 wallForward = Vector3.ProjectOnPlane(transform.forward, wallNormal).normalized;
+            if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
+
+            float forceMult = isLaunch ? 1.25f : 1f;
+            Vector3 kickDir = (wallNormal * wallKickForce * forceMult) + (Vector3.up * wallKickUpForce * forceMult) + (wallForward * wallKickForwardForce * forceMult);
+
+            rb.linearVelocity = kickDir;
+            thirdPersonController.ResetJumpTime();
+            characterMovement.DisableFeetIK();
+
+            thirdPersonController.cameraController?.ShakeMedium();
+            
+            if (isLaunch)
+            {
+                thirdPersonController.cameraController?.SetFOVState(CameraFOVState.AirDash);
+                thirdPersonController.characterAnimation.animator.CrossFade("Predicted Jump", 0.1f);
+            }
+
+            StartCoroutine(WallRunCooldownRoutine(wallRunCooldown));
+        }
+
+        private void WallMantle()
         {
             StopWallRun(startCooldown: false);
 
             Rigidbody rb = characterMovement.rb;
-            
-            // Titanfall style "Kick" - Push away from wall and forward
-            Vector3 kickDir = (wallNormal * wallKickForce) + (Vector3.up * wallKickUpForce) + (transform.forward * wallKickForwardForce);
-            
-            rb.linearVelocity = kickDir;
-            
+            rb.linearVelocity = Vector3.zero;
+
+            Vector3 mantleDir = (Vector3.up * wallKickUpForce * 0.85f) + (transform.forward * wallKickForwardForce * 1.5f);
+            rb.AddForce(mantleDir, ForceMode.Impulse);
+
+            if (thirdPersonController.characterAnimation != null)
+            {
+                thirdPersonController.characterAnimation.animator.CrossFade("Deep Jump", 0.1f);
+            }
+
             thirdPersonController.cameraController?.ShakeMedium();
             StartCoroutine(WallRunCooldownRoutine(wallRunCooldown));
         }
@@ -275,21 +384,31 @@ currentWallRunSpeed = Mathf.Max(horizontalVel.magnitude, wallRunSpeedBase);
         {
             if (!isWallRunning) return;
 
+            if (thirdPersonController.characterDetection.showDebug)
+                Debug.Log("[WallRun] Stopping wallrun.");
+
             isWallRunning = false;
             currentDir = WallRunDirection.None;
 
             characterMovement.rb.useGravity = true;
             characterMovement.stopMotion = false;
+            characterMovement.EnableFeetIK();
             thirdPersonController.ClearParkourState(ParkourState.WallRunning);
+            
+            if (!thirdPersonController.isGrounded)
+            {
+                thirdPersonController.isJumping = true;
+                thirdPersonController.onAir = true;
+            }
+
             SwapColliders(false);
 
             thirdPersonController.cameraController?.SetFOVState(CameraFOVState.Walk);
             thirdPersonController.cameraController?.ResetTilt();
 
-            // Reset model rotation to local identity
             if (characterModel != null)
             {
-                characterModel.DOLocalRotate(Vector3.zero, 0.2f);
+                characterModel.DOLocalRotate(Vector3.zero, 0.6f).SetEase(Ease.OutSine);
             }
 
             if (thirdPersonController.characterAnimation != null)
@@ -311,15 +430,26 @@ currentWallRunSpeed = Mathf.Max(horizontalVel.magnitude, wallRunSpeedBase);
 
             if (characterModel != null)
             {
-                Vector3 wallForward = Vector3.Cross(wallNormal, Vector3.up).normalized;
-                if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
+                if (currentDir == WallRunDirection.Up)
+                {
+                    Vector3 wallUp = Vector3.ProjectOnPlane(Vector3.up, wallNormal).normalized;
+                    Quaternion targetRotation = Quaternion.LookRotation(wallUp, wallNormal);
+                    characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRotation, Time.deltaTime * modelRotationSpeed);
+                }
+                else
+                {
+                    Vector3 wallForward = Vector3.ProjectOnPlane(transform.forward, wallNormal).normalized;
+                    if (Vector3.Dot(transform.forward, wallForward) < 0) wallForward = -wallForward;
 
-                Vector3 targetUp = Vector3.up;
-                if (currentDir == WallRunDirection.Left) targetUp = Quaternion.AngleAxis(-20f, wallForward) * Vector3.up;
-                else if (currentDir == WallRunDirection.Right) targetUp = Quaternion.AngleAxis(20f, wallForward) * Vector3.up;
+                    Vector3 targetUp = Vector3.up;
+                    if (currentDir == WallRunDirection.Left) targetUp = Quaternion.AngleAxis(-25f, wallForward) * Vector3.up;
+                    else if (currentDir == WallRunDirection.Right) targetUp = Quaternion.AngleAxis(25f, wallForward) * Vector3.up;
 
-                Quaternion targetRotation = Quaternion.LookRotation(wallForward, targetUp);
-                characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRotation, Time.deltaTime * modelRotationSpeed);
+                    targetUp = Vector3.Slerp(targetUp, wallNormal + Vector3.up, 0.4f).normalized;
+
+                    Quaternion targetRotation = Quaternion.LookRotation(wallForward, targetUp);
+                    characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRotation, Time.deltaTime * modelRotationSpeed);
+                }
             }
         }
 
