@@ -352,39 +352,21 @@ namespace Climbing
 
         #region Foot IK
 
-        private float dynamicIkWeight = 1f;
-
         private void OnAnimatorIK(int layerIndex)
         {
             if (!enableFeetIK || controller.dummy || anim == null)
-            {
-                dynamicIkWeight = 0f;
                 return;
-            }
-
-            // Only fully apply ground IK smoothly when the player is idle and on the ground 
-            // Avoids overriding proper walk/run/parkour root motion and limb animations
-            bool isIdle = (controller.characterInput.movement.magnitude < 0.1f) && controller.isGrounded && !controller.isJumping && !controller.IsParkourBusy;
-            float targetIkWeight = isIdle ? 1f : 0f;
-            dynamicIkWeight = Mathf.Lerp(dynamicIkWeight, targetIkWeight, Time.deltaTime * 8f);
-
-            if (dynamicIkWeight < 0.01f)
-            {
-                // Reset pelvis height interpolation state implicitly when not IK'ing
-                lastPelvisPositionY = anim.bodyPosition.y;
-                return;
-            }
 
             MovePelvisHeight();
 
             //Left Foot IK Position and Rotation
-            anim.SetIKPositionWeight(AvatarIKGoal.LeftFoot, dynamicIkWeight);
-            anim.SetIKRotationWeight(AvatarIKGoal.LeftFoot, anim.GetFloat(leftFootAnim) * dynamicIkWeight);
+            anim.SetIKPositionWeight(AvatarIKGoal.LeftFoot, 1);
+            anim.SetIKRotationWeight(AvatarIKGoal.LeftFoot, anim.GetFloat(leftFootAnim));
             MoveFeetToIKPoint(AvatarIKGoal.LeftFoot, leftFootIKPosition, leftFootIKRotation, ref lastLeftFootPosition);
 
             //Right Foot IK Position and Rotation
-            anim.SetIKPositionWeight(AvatarIKGoal.RightFoot, dynamicIkWeight);
-            anim.SetIKRotationWeight(AvatarIKGoal.RightFoot, anim.GetFloat(rightFootAnim) * dynamicIkWeight);
+            anim.SetIKPositionWeight(AvatarIKGoal.RightFoot, 1);
+            anim.SetIKRotationWeight(AvatarIKGoal.RightFoot, anim.GetFloat(rightFootAnim));
             MoveFeetToIKPoint(AvatarIKGoal.RightFoot, rightFootIKPosition, rightFootIKRotation, ref lastRightFootPosition);
         }
 

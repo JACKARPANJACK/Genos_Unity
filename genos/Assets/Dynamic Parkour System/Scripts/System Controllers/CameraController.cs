@@ -172,41 +172,32 @@ namespace Climbing
             playerMovement = GameObject.FindAnyObjectByType<MovementCharacterController>();
 
         freeLookCamera = GetComponent<CinemachineCamera>();
-        if (freeLookCamera != null)
+if (freeLookCamera != null)
+{
+    var orbitalFollow = freeLookCamera.GetComponent<CinemachineOrbitalFollow>();
+    if (orbitalFollow != null)
+    {
+        originalRadius = orbitalFollow.Radius;
+        originalRadii[0] = orbitalFollow.Orbits.Top.Radius;
+        originalRadii[1] = orbitalFollow.Orbits.Center.Radius;
+        originalRadii[2] = orbitalFollow.Orbits.Bottom.Radius;
+    }
+    else
+    {
+        var thirdPersonFollow = freeLookCamera.GetComponent<CinemachineThirdPersonFollow>();
+        if (thirdPersonFollow != null)
         {
-            var orbitalFollow = freeLookCamera.GetComponent<CinemachineOrbitalFollow>();
-            if (orbitalFollow != null)
-            {
-                originalRadius = orbitalFollow.Radius;
-                originalRadii[0] = orbitalFollow.Orbits.Top.Radius;
-                originalRadii[1] = orbitalFollow.Orbits.Center.Radius;
-                originalRadii[2] = orbitalFollow.Orbits.Bottom.Radius;
-            }
-            else
-            {
-                var thirdPersonFollow = freeLookCamera.GetComponent<CinemachineThirdPersonFollow>();
-                if (thirdPersonFollow != null)
-                {
-                    originalRadius = thirdPersonFollow.CameraDistance;
-                }
-            }
-
-            // Seed runtime FOV from whatever is in the lens right now
-            currentFOV = freeLookCamera.Lens.FieldOfView;
-            float fovOffset = currentFOV - baseFOV;
-            baseFOV = currentFOV;
-
-            // Make profiles relative to the camera's base FOV so proper FOV values are used
-            walkProfile.fieldOfView += fovOffset;
-            runProfile.fieldOfView += fovOffset;
-            wallRunProfile.fieldOfView += fovOffset;
-            parkourProfile.fieldOfView += fovOffset;
-            airDashProfile.fieldOfView += fovOffset;
+            originalRadius = thirdPersonFollow.CameraDistance;
         }
-        else
-        {
-            currentFOV = baseFOV;
-        }
+    }
+
+    // Seed runtime FOV from whatever is in the lens right now
+    currentFOV = freeLookCamera.Lens.FieldOfView;
+}
+else
+{
+    currentFOV = baseFOV;
+}
 
             currentDutch = 0f;
         }

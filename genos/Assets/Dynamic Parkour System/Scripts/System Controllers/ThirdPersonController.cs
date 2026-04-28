@@ -225,48 +225,51 @@ namespace Climbing
             // Consume the input so it doesn't fire elsewhere
             characterInput.ConsumeJumpPressedBuffered();
 
-            // Compute dash direction based on camera relative input
-            Vector2 input = characterInput.movement;
-            Vector3 inputDir = new Vector3(input.x, 0, input.y);
+            // Compute dash direction from camera-relative input
+            Vector3 dashDir = transform.forward; // Default to forward
+            bool hasMovementInput = characterInput.movement.sqrMagnitude > 0.01f;
 
-            int dashAnimDir = 0; // 0 = Forward, 1 = Backward, 2 = Left, 3 = Right
-
-            if (inputDir.sqrMagnitude > 0.01f && mainCamera != null)
+            if (hasMovementInput)
             {
-                inputDir.Normalize();
+                freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
+                dashDir = (freeCamera.transform.forward * characterInput.movement.y
+                                  + freeCamera.transform.right  * characterInput.movement.x).normalized;
+            }
+
+            airDashDirection = dashDir;
+
+            // Backward detection using Dot product relative to camera facing
+            // If dashDir is opposite to camera forward, it's a back dash
+            float forwardDot = Vector3.Dot(dashDir, mainCamera.forward);
+            bool isBackDash = forwardDot < -0.5f;
+
+            // Rotation logic: 
+            // If forward/side dash -> Face dash direction
+            // If back dash -> Face camera forward (dashing back while looking front)
+            if (isBackDash)
+            {
                 Vector3 cameraForwardFlat = mainCamera.forward;
                 cameraForwardFlat.y = 0;
-                cameraForwardFlat.Normalize();
-
-                Vector3 cameraRightFlat = mainCamera.right;
-                cameraRightFlat.y = 0;
-                cameraRightFlat.Normalize();
-
-                airDashDirection = cameraForwardFlat * inputDir.z + cameraRightFlat * inputDir.x;
-                airDashDirection.Normalize();
+                if (cameraForwardFlat.sqrMagnitude > 0.001f)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
+                    transform.DORotateQuaternion(targetRot, 0.15f);
+                }
             }
-            else
+            else if (hasMovementInput)
             {
-                // Back dash when no input is pressed
-                airDashDirection = -transform.forward;
+                Quaternion targetRot = Quaternion.LookRotation(dashDir, Vector3.up);
+                transform.DORotateQuaternion(targetRot, 0.15f);
             }
 
-            // Deduce the correct animation simply based on the dash direction relative to where the character is already facing.
-            // This cleanly handles both free movement and lock-on behavior without camera glitches or forced rotation snapping.
-            Vector3 localDashDir = transform.InverseTransformDirection(airDashDirection);
-            if (Mathf.Abs(localDashDir.x) > Mathf.Abs(localDashDir.z))
-            {
-                dashAnimDir = localDashDir.x > 0 ? 3 : 2; // Right or Left
-            }
-            else
-            {
-                dashAnimDir = localDashDir.z > 0 ? 0 : 1; // Forward or Backward
-            }
+            // Lock camera rotation during dash
+            cameraController?.SetCameraRotationLock(true);
 
             // Turn off IK during dash
             characterMovement.DisableFeetIK();
 
-            characterAnimation.Dash(dashAnimDir);
+            // Play appropriate animation via unified controller
+            characterAnimation.Dash(isBackDash);
             characterAnimation.SetDashing(true);
 
             characterMovement.stopMotion = true;
@@ -296,6 +299,7 @@ namespace Climbing
                 characterMovement.EnableFeetIK();
                 airDashRecoverTimer = airDashSetting.recoverTime;
                 cameraController?.SetFOVState(CameraFOVState.Walk);
+                cameraController?.SetCameraRotationLock(false);
             })
             .OnKill(() =>
             {
@@ -308,6 +312,7 @@ namespace Climbing
                     characterMovement.EnableFeetIK();
                 }
                 cameraController?.SetFOVState(CameraFOVState.Walk);
+                cameraController?.SetCameraRotationLock(false);
             });
 }
 
@@ -347,48 +352,48 @@ namespace Climbing
             isGroundDashing = true;
             groundDashTween?.Kill();
 
-            // Compute dash direction based on camera relative input
-            Vector2 input = characterInput.movement;
-            Vector3 inputDir = new Vector3(input.x, 0, input.y);
+            // Compute dash direction from camera-relative input
+            Vector3 dashDir = transform.forward;
+            bool hasMovementInput = characterInput.movement.sqrMagnitude > 0.01f;
 
-            int dashAnimDir = 0; // 0 = Forward, 1 = Backward, 2 = Left, 3 = Right
-
-            if (inputDir.sqrMagnitude > 0.01f && mainCamera != null)
+            if (hasMovementInput)
             {
-                inputDir.Normalize();
+                freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
+                dashDir = (freeCamera.transform.forward * characterInput.movement.y
+                                     + freeCamera.transform.right  * characterInput.movement.x).normalized;
+            }
+
+            groundDashDirection = dashDir;
+
+            // Backward detection
+            float forwardDot = Vector3.Dot(dashDir, mainCamera.forward);
+            bool isBackDash = forwardDot < -0.5f;
+
+            // Rotation logic
+            if (isBackDash)
+            {
                 Vector3 cameraForwardFlat = mainCamera.forward;
                 cameraForwardFlat.y = 0;
-                cameraForwardFlat.Normalize();
-
-                Vector3 cameraRightFlat = mainCamera.right;
-                cameraRightFlat.y = 0;
-                cameraRightFlat.Normalize();
-
-                groundDashDirection = cameraForwardFlat * inputDir.z + cameraRightFlat * inputDir.x;
-                groundDashDirection.Normalize();
+                if (cameraForwardFlat.sqrMagnitude > 0.001f)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
+                    transform.DORotateQuaternion(targetRot, 0.15f);
+                }
             }
-            else
+            else if (hasMovementInput)
             {
-                // Fallback (Straight backward dash, no input)
-                groundDashDirection = -transform.forward;
+                Quaternion targetRot = Quaternion.LookRotation(dashDir, Vector3.up);
+                transform.DORotateQuaternion(targetRot, 0.15f);
             }
 
-            // Deduce the correct animation simply based on the dash direction relative to where the character is already facing.
-            // This cleanly handles both free movement and lock-on behavior without camera glitches or forced rotation snapping.
-            Vector3 localDashDir = transform.InverseTransformDirection(groundDashDirection);
-            if (Mathf.Abs(localDashDir.x) > Mathf.Abs(localDashDir.z))
-            {
-                dashAnimDir = localDashDir.x > 0 ? 3 : 2; // Right or Left
-            }
-            else
-            {
-                dashAnimDir = localDashDir.z > 0 ? 0 : 1; // Forward or Backward
-            }
+            // Lock camera rotation
+            cameraController?.SetCameraRotationLock(true);
 
             // Turn off IK
             characterMovement.DisableFeetIK();
 
-            characterAnimation.Dash(dashAnimDir);
+            // Play appropriate animation via unified controller
+            characterAnimation.Dash(isBackDash);
             characterAnimation.SetDashing(true);
 
             characterMovement.stopMotion = true;
@@ -419,6 +424,7 @@ namespace Climbing
                 isGroundDashRecovering = true;
                 groundDashRecoverTimer = groundDashSetting.recoverTime;
                 cameraController?.SetFOVState(CameraFOVState.Run);
+                cameraController?.SetCameraRotationLock(false);
             })
             .OnKill(() =>
             {
@@ -431,6 +437,7 @@ namespace Climbing
                     characterMovement.EnableFeetIK();
                 }
                 cameraController?.SetFOVState(CameraFOVState.Walk);
+                cameraController?.SetCameraRotationLock(false);
             });
 }
 
@@ -447,8 +454,24 @@ namespace Climbing
             // Turn off IK
             characterMovement.DisableFeetIK();
 
-            // Compute dash direction (strict backward relative to current facing)
-            Vector3 dashDir = -transform.forward;
+            // Compute dash direction (backward relative to camera/facing)
+Vector3 dashDir;
+            if (characterInput.movement.sqrMagnitude > 0.01f)
+            {
+                freeCamera.eulerAngles = new Vector3(0, mainCamera.eulerAngles.y, 0);
+                dashDir = (freeCamera.transform.forward * characterInput.movement.y
+                         + freeCamera.transform.right  * characterInput.movement.x).normalized;
+            }
+            else
+            {
+                dashDir = -transform.forward;
+            }
+
+            // For explicit back dash, we definitely want to face forward
+            Vector3 cameraForwardFlat = mainCamera.forward;
+            cameraForwardFlat.y = 0;
+            if (cameraForwardFlat.sqrMagnitude > 0.001f)
+                transform.rotation = Quaternion.LookRotation(cameraForwardFlat.normalized, Vector3.up);
 
             if (isGrounded)
             {
@@ -457,7 +480,7 @@ namespace Climbing
                 isGroundDashing = true;
                 groundDashTween?.Kill();
                 groundDashDirection = dashDir;
-                characterAnimation.Dash(1); // 1 = Backward
+                characterAnimation.Dash(true);
                 characterAnimation.SetDashing(true);
                 
                 characterMovement.stopMotion = true;
@@ -503,7 +526,7 @@ namespace Climbing
                 isAirDashing = true;
                 airDashTween?.Kill();
                 airDashDirection = dashDir;
-                characterAnimation.Dash(1); // 1 = Backward
+                characterAnimation.Dash(true);
                 characterAnimation.SetDashing(true);
                 
                 characterMovement.stopMotion = true;
