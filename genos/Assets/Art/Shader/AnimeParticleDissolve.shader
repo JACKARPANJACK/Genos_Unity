@@ -69,9 +69,9 @@ Shader "Custom/AnimeParticleDissolve"
                 float4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv);
                 
                 // Robust Intensity detection:
-                // Since we set textures to 'Alpha from Grayscale', the shape is in the Alpha channel.
-                // However, the RGB might still contain the grayscale if sRGB was checked.
-                float intensity = tex.a;
+                // Handle both textures with Alpha channels and textures with Black backgrounds.
+                float rgbIntensity = max(tex.r, max(tex.g, tex.b));
+                float intensity = max(tex.a, rgbIntensity);
                 
                 // Particle Life Progress (driven by vertex alpha)
                 float progress = 1.0 - i.color.a; 

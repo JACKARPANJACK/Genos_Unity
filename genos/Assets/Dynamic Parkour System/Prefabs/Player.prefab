@@ -29,7 +29,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5556358532959275495}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.051737726, y: 0.3603552, z: -0.020022208, w: 0.9311641}
+  m_LocalRotation: {x: 0.051737733, y: 0.3603552, z: -0.020022213, w: 0.9311641}
   m_LocalPosition: {x: -6.674739, y: 2.6932006, z: -3.487545}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -256,7 +256,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5556358533377525086}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.051737733, y: 0.3603552, z: -0.020022208, w: 0.9311641}
+  m_LocalRotation: {x: 0.051737737, y: 0.3603552, z: -0.02002221, w: 0.9311641}
   m_LocalPosition: {x: -6.674739, y: 2.6932006, z: -3.487545}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -435,43 +435,64 @@ MonoBehaviour:
   zoomSpeed: 2
   minZoom: 0.5
   maxZoom: 2
-  baseFOV: 60
+  baseFOV: 5
+  idleProfile:
+    fieldOfView: 5
+    fovBlendTime: 0.5
+    fovEase: 9
+    dutch: 0
+    dutchBlendTime: 0.2
+    dutchEase: 3
   walkProfile:
-    fieldOfView: 60
+    fieldOfView: 10
     fovBlendTime: 0.4
     fovEase: 9
     dutch: 0
     dutchBlendTime: 0.2
     dutchEase: 3
   runProfile:
-    fieldOfView: 65
+    fieldOfView: 15
     fovBlendTime: 0.35
     fovEase: 9
     dutch: 0
     dutchBlendTime: 0.2
     dutchEase: 3
   wallRunProfile:
-    fieldOfView: 75
+    fieldOfView: 80
     fovBlendTime: 0.25
     fovEase: 9
     dutch: 14
     dutchBlendTime: 0.2
     dutchEase: 3
   parkourProfile:
-    fieldOfView: 70
+    fieldOfView: 60
     fovBlendTime: 0.2
     fovEase: 6
     dutch: 0
     dutchBlendTime: 0.2
     dutchEase: 3
   airDashProfile:
-    fieldOfView: 82
+    fieldOfView: 100
     fovBlendTime: 0.12
     fovEase: 18
     dutch: 0
     dutchBlendTime: 0.2
     dutchEase: 3
-  impulseSource: {fileID: 0}
+  jumpProfile:
+    fieldOfView: 90
+    fovBlendTime: 0.2
+    fovEase: 6
+    dutch: 0
+    dutchBlendTime: 0.2
+    dutchEase: 3
+  chargeJumpProfile:
+    fieldOfView: 100
+    fovBlendTime: 0.1
+    fovEase: 18
+    dutch: 0
+    dutchBlendTime: 0.2
+    dutchEase: 3
+  impulseSource: {fileID: 1412531525196915605}
   lightShake:
     force: 0.25
     direction: {x: 0, y: 1, z: 0}
@@ -590,7 +611,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineDeoccluder
   CollideAgainst:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 961
   IgnoreTag: Player
   TransparentLayers:
     serializedVersion: 2
@@ -822,7 +843,6 @@ GameObject:
   - component: {fileID: 5556358534646836589}
   - component: {fileID: 5556358534646836585}
   - component: {fileID: 5556358534646836584}
-  - component: {fileID: 1504103122322176804}
   - component: {fileID: 5553953823504388253}
   - component: {fileID: 5019391064512342715}
   - component: {fileID: 2456352410799462807}
@@ -862,7 +882,7 @@ Animator:
   m_Controller: {fileID: 9100000, guid: e3e25480d2d5544409a577f05406fb17, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 1
-  m_ApplyRootMotion: 0
+  m_ApplyRootMotion: 1
   m_LinearVelocityBlending: 0
   m_StabilizeFeet: 0
   m_AnimatePhysics: 0
@@ -992,25 +1012,25 @@ MonoBehaviour:
   activeParkourState: 0
   airDashSetting:
     dashTime: 0.2
-    dashForce: 80
+    dashForce: 40
     dashCurve:
       serializedVersion: 2
       m_Curve:
       - serializedVersion: 3
-        time: -0.0046501607
-        value: 1.4992821
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
+        time: 0
+        value: 0
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 34
         weightedMode: 0
         inWeight: 0
         outWeight: 0
       - serializedVersion: 3
         time: 1
-        value: 0
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
+        value: 1
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 34
         weightedMode: 0
         inWeight: 0
         outWeight: 0
@@ -1021,25 +1041,25 @@ MonoBehaviour:
   canAirDash: 1
   groundDashSetting:
     dashTime: 0.25
-    dashForce: 80
+    dashForce: 40
     dashCurve:
       serializedVersion: 2
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 1
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
+        value: 0
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 34
         weightedMode: 0
         inWeight: 0
         outWeight: 0
       - serializedVersion: 3
         time: 1
-        value: 0
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
+        value: 1
+        inSlope: 1
+        outSlope: 1
+        tangentMode: 34
         weightedMode: 0
         inWeight: 0
         outWeight: 0
@@ -1054,6 +1074,18 @@ MonoBehaviour:
   cameraController: {fileID: 5556358533377525083}
   mainCamera: {fileID: 5556358532959275490}
   freeCamera: {fileID: 5556358533377525084}
+  leftHandSocket: {fileID: 9003201407854672362}
+  rightHandSocket: {fileID: 5522161225330355634}
+  leftShoulderSocket: {fileID: 3202239181541764705}
+  rightShoulderSocket: {fileID: 7130170843058285481}
+  dashVFX: {fileID: 4580657320398059509, guid: eebc2bec969e5ef40a6c1a16002355ef, type: 3}
+  chargeJumpVFX: {fileID: 0}
+  jumpLaunchVFX: {fileID: 796314081359015634, guid: 79ffd7242ff3c524e9013096ddbdf713, type: 3}
+  landingCrackVFX: {fileID: 5970118040434926004, guid: cad2bed4e0585014c9b71d161be36146, type: 3}
+  electricityAfterImagePrefab: {fileID: 3223532370646731696, guid: 36b87abec6359ce468f74ac92da3cdbe, type: 3}
+  afterImageMaterial: {fileID: 2100000, guid: cfe54363cd3685848aa1b1653b05798d, type: 2}
+  electricityTrailPS: {fileID: 8809139478618256001, guid: 4ab02058e7eb32a429d7ec43cb676c6f, type: 3}
+  afterImageInterval: 0.05
   stepHeight: 0.6
   stepVelocity: 0.08
   normalCapsuleCollider: {fileID: 5556358534646836576}
@@ -1160,8 +1192,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   showDebug: 0
-  maxHeight: 5
-  maxDistance: 8
+  maxHeight: 10
+  maxDistance: 18
   curPoint: {fileID: 0}
 --- !u!114 &5556358534646836584
 MonoBehaviour:
@@ -1192,77 +1224,6 @@ MonoBehaviour:
   RHandAnimVariableName: RHandCurve
   LFootAnimVariableName: LeftFootCurve
   RFootAnimVariableName: RightFootCurve
---- !u!114 &1504103122322176804
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5556358534646836578}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2ce077e73dad4e6459a2a7f99a5ce342, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Climbing.CameraController
-  _offset: {x: 0, y: 0, z: 0}
-  _default: {x: 0, y: 0, z: 0}
-  maxTime: 2
-  isIdle: 0
-  swaySpeed: 0.01
-  swayAmount: 0.01
-  baseOffset: {x: 0, y: 0, z: 0}
-  zoomSpeed: 2
-  minZoom: 0.1
-  maxZoom: 8
-  baseFOV: 5
-  walkProfile:
-    fieldOfView: 15
-    fovBlendTime: 0.4
-    fovEase: 9
-    dutch: 0
-    dutchBlendTime: 0.2
-    dutchEase: 3
-  runProfile:
-    fieldOfView: 30
-    fovBlendTime: 0.35
-    fovEase: 9
-    dutch: 0
-    dutchBlendTime: 0.2
-    dutchEase: 3
-  wallRunProfile:
-    fieldOfView: 50
-    fovBlendTime: 0.25
-    fovEase: 9
-    dutch: 14
-    dutchBlendTime: 0.2
-    dutchEase: 3
-  parkourProfile:
-    fieldOfView: 40
-    fovBlendTime: 0.2
-    fovEase: 6
-    dutch: 0
-    dutchBlendTime: 0.2
-    dutchEase: 3
-  airDashProfile:
-    fieldOfView: 40
-    fovBlendTime: 0.12
-    fovEase: 18
-    dutch: 0
-    dutchBlendTime: 0.2
-    dutchEase: 3
-  impulseSource: {fileID: 1412531525196915605}
-  lightShake:
-    force: 0.25
-    direction: {x: 0, y: 1, z: 0}
-  mediumShake:
-    force: 0.6
-    direction: {x: 0, y: 1, z: 0}
-  heavyShake:
-    force: 1.2
-    direction: {x: 0, y: 1, z: 0}
-  useDynamicFOV: 1
-  dynamicFOVSensitivity: 1
-  maxDynamicFOVAdd: 15
 --- !u!114 &5553953823504388253
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1277,12 +1238,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Climbing.WallRunController
   characterModel: {fileID: 5556358534646836579}
   wallRunSpeedBase: 12.5
-  wallRunSpeedMax: 27
-  wallRunAcceleration: 7
+  wallRunSpeedMax: 30
+  wallRunAcceleration: 5
   wallGravity: 2.5
   wallStickyForce: 35
-  maxWallRunTime: 10
-  wallRunCooldown: 0.6
+  maxWallRunTime: 100
+  wallRunCooldown: 0
   wallKickForce: 20
   wallKickUpForce: 12
   wallKickForwardForce: 7
@@ -1294,12 +1255,13 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 512
   wallRunTag: WallRunnable
-  wallCheckDistance: 2
-  sphereCastRadius: 2
+  wallCheckDistance: 0.5
+  sphereCastRadius: 1
   minJumpHeight: 0.5
   raycastYOffset: 1
   modelRotationSpeed: 15
   isWallRunning: 0
+  targetWallDistance: 0.85
 --- !u!114 &5019391064512342715
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2263,6 +2225,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 5119251585535427606, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
   m_PrefabInstance: {fileID: 7350693995485021716}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &3202239181541764705 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5364432223793129589, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
+  m_PrefabInstance: {fileID: 7350693995485021716}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &3629790739028800486 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6079140744334620146, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
@@ -2293,9 +2260,19 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 3296058686906440866, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
   m_PrefabInstance: {fileID: 7350693995485021716}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &5522161225330355634 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3071526818675370918, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
+  m_PrefabInstance: {fileID: 7350693995485021716}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &5742474452644829908 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3004946761981484224, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
+  m_PrefabInstance: {fileID: 7350693995485021716}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &7130170843058285481 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 356239175473524157, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
   m_PrefabInstance: {fileID: 7350693995485021716}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &8710472730684547054 stripped
@@ -2311,6 +2288,11 @@ Transform:
 --- !u!4 &8847234416054763682 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2073162081690273462, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
+  m_PrefabInstance: {fileID: 7350693995485021716}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &9003201407854672362 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1941934093713424382, guid: c06c1e6211cc95246a8d2db1a55b67a5, type: 3}
   m_PrefabInstance: {fileID: 7350693995485021716}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &9025746577239055470 stripped

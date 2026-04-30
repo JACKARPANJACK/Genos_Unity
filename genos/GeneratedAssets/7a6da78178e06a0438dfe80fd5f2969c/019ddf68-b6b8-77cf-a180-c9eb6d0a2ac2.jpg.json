@@ -1,0 +1,27 @@
+{
+    "asset": "7a6da78178e06a0438dfe80fd5f2969c",
+    "fileName": "019ddf68-b6b8-77cf-a180-c9eb6d0a2ac2.jpg",
+    "prompt": "Ground crack with blue electricity glowing inside, jagged jagged cracks, game asset, black background",
+    "negativePrompt": "",
+    "model": "f722aea3-8760-4eb1-a516-e2fce6476303",
+    "modelName": "Seedream 4",
+    "customSeed": -1,
+    "w3CTraceId": "e9ec07755012982c8b6c72204e7af667",
+    "feedback": 0,
+    "refinementMode": "Generation",
+    "pixelateTargetSize": 0,
+    "pixelateKeepImageSize": false,
+    "pixelatePixelBlockSize": 0,
+    "pixelateMode": 0,
+    "pixelateOutlineThickness": 0,
+    "doodles": {
+        "m_Items": []
+    },
+    "upscaleFactor": 0,
+    "dimensions": {
+        "width": 1024,
+        "height": 1024
+    },
+    "spriteSheet": false,
+    "duration": 0.0
+}

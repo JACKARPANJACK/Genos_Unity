@@ -1,0 +1,27 @@
+{
+    "asset": "5783d079a4a84d243829fe713f6c6d20",
+    "fileName": "019ddf68-b634-776b-9451-03f8ad0c88bf.jpg",
+    "prompt": "Circular electric shockwave, blue electricity sparks, expanding ring, top-down view, game asset, black background",
+    "negativePrompt": "",
+    "model": "f722aea3-8760-4eb1-a516-e2fce6476303",
+    "modelName": "Seedream 4",
+    "customSeed": -1,
+    "w3CTraceId": "0bec182e636716ca0314ecf40dbef248",
+    "feedback": 0,
+    "refinementMode": "Generation",
+    "pixelateTargetSize": 0,
+    "pixelateKeepImageSize": false,
+    "pixelatePixelBlockSize": 0,
+    "pixelateMode": 0,
+    "pixelateOutlineThickness": 0,
+    "doodles": {
+        "m_Items": []
+    },
+    "upscaleFactor": 0,
+    "dimensions": {
+        "width": 1024,
+        "height": 1024
+    },
+    "spriteSheet": false,
+    "duration": 0.0
+}

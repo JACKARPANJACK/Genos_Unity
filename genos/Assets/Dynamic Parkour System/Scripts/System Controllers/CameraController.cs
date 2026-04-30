@@ -33,7 +33,7 @@ namespace Climbing
     // ?? State enum ??????????????????????????????????????????????????????????????
 
     /// <summary>Named movement states that each carry their own camera profile.</summary>
-    public enum CameraFOVState { Idle, Walk, Run, WallRun, Parkour, AirDash }
+    public enum CameraFOVState { Idle, Walk, Run, WallRun, Parkour, AirDash, Jump, ChargeJump }
 
     // ?? Data types ??????????????????????????????????????????????????????????????
 
@@ -45,7 +45,7 @@ namespace Climbing
     public class CameraStateProfile
     {
         [Tooltip("Target field of view in degrees.")]
-        public float fieldOfView = 60f;
+        public float fieldOfView = 10f;
 
         [Tooltip("Seconds to blend toward this FOV.")]
         public float fovBlendTime = 0.3f;
@@ -108,24 +108,34 @@ namespace Climbing
         // ?? FOV & Dutch profiles ????????????????????????????????????????????
 
         [Header("Base FOV")]
-        [Tooltip("Default field of view used as the Idle/Walk baseline.")]
-        public float baseFOV = 60f;
+        [Tooltip("Master baseline field of view. Lower values = closer view. " +
+                 "Profiles are applied as offsets relative to this value (assuming 50 is neutral).")]
+        public float baseFOV = 10f;
 
         [Header("FOV Profiles")]
-        public CameraStateProfile walkProfile  = new CameraStateProfile { fieldOfView = 60f, fovBlendTime = 0.4f };
-        public CameraStateProfile runProfile   = new CameraStateProfile { fieldOfView = 65f, fovBlendTime = 0.35f };
+        public CameraStateProfile idleProfile  = new CameraStateProfile { fieldOfView = 5f, fovBlendTime = 0.5f, fovEase = Ease.OutCubic };
+        public CameraStateProfile walkProfile  = new CameraStateProfile { fieldOfView = 10f, fovBlendTime = 0.4f };
+        public CameraStateProfile runProfile   = new CameraStateProfile { fieldOfView = 15f, fovBlendTime = 0.35f };
         public CameraStateProfile wallRunProfile = new CameraStateProfile
         {
-            fieldOfView = 75f,  fovBlendTime = 0.25f, fovEase = Ease.OutCubic,
+            fieldOfView = 55f,  fovBlendTime = 0.25f, fovEase = Ease.OutCubic,
             dutch = 0f,         dutchBlendTime = 0.2f, dutchEase = Ease.OutSine
         };
         public CameraStateProfile parkourProfile = new CameraStateProfile
         {
-            fieldOfView = 70f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad
+            fieldOfView = 50f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad
         };
         public CameraStateProfile airDashProfile = new CameraStateProfile
         {
-            fieldOfView = 82f, fovBlendTime = 0.12f, fovEase = Ease.OutExpo
+            fieldOfView = 72f, fovBlendTime = 0.12f, fovEase = Ease.OutExpo
+        };
+        public CameraStateProfile jumpProfile = new CameraStateProfile
+        {
+            fieldOfView = 80f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad
+        };
+        public CameraStateProfile chargeJumpProfile = new CameraStateProfile
+        {
+            fieldOfView = 150f, fovBlendTime = 0.1f, fovEase = Ease.OutExpo
         };
 
         // ?? Camera shake ????????????????????????????????????????????????????
@@ -143,9 +153,10 @@ namespace Climbing
 
         // ?? Runtime state ???????????????????????????????????????????????????
 
-        private float currentFOV;
+        private float stateFOV;
+        private float dynamicFOVAdd;
         private float currentDutch;
-        private CameraFOVState activeFOVState = CameraFOVState.Idle;
+        private CameraFOVState activeFOVState = (CameraFOVState)(-1);
         private Tween fovTween;
         private Tween dutchTween;
 
@@ -171,58 +182,65 @@ namespace Climbing
 
             playerMovement = GameObject.FindAnyObjectByType<MovementCharacterController>();
 
-        freeLookCamera = GetComponent<CinemachineCamera>();
-if (freeLookCamera != null)
-{
-    var orbitalFollow = freeLookCamera.GetComponent<CinemachineOrbitalFollow>();
-    if (orbitalFollow != null)
-    {
-        originalRadius = orbitalFollow.Radius;
-        originalRadii[0] = orbitalFollow.Orbits.Top.Radius;
-        originalRadii[1] = orbitalFollow.Orbits.Center.Radius;
-        originalRadii[2] = orbitalFollow.Orbits.Bottom.Radius;
-    }
-    else
-    {
-        var thirdPersonFollow = freeLookCamera.GetComponent<CinemachineThirdPersonFollow>();
-        if (thirdPersonFollow != null)
-        {
-            originalRadius = thirdPersonFollow.CameraDistance;
-        }
-    }
+            freeLookCamera = GetComponent<CinemachineCamera>();
+            if (freeLookCamera != null)
+            {
+                var orbitalFollow = freeLookCamera.GetComponent<CinemachineOrbitalFollow>();
+                if (orbitalFollow != null)
+                {
+                    originalRadius = orbitalFollow.Radius;
+                    originalRadii[0] = orbitalFollow.Orbits.Top.Radius;
+                    originalRadii[1] = orbitalFollow.Orbits.Center.Radius;
+                    originalRadii[2] = orbitalFollow.Orbits.Bottom.Radius;
+                }
+                else
+                {
+                    var thirdPersonFollow = freeLookCamera.GetComponent<CinemachineThirdPersonFollow>();
+                    if (thirdPersonFollow != null)
+                    {
+                        originalRadius = thirdPersonFollow.CameraDistance;
+                    }
+                }
+            }
 
-    // Seed runtime FOV from whatever is in the lens right now
-    currentFOV = freeLookCamera.Lens.FieldOfView;
-}
-else
-{
-    currentFOV = baseFOV;
-}
-
+            // Seed stateFOV from the baseline to ensure we don't start at 0
+            stateFOV = baseFOV;
             currentDutch = 0f;
+            dynamicFOVAdd = 0f;
+
+            // Immediately apply the Idle state to synchronize the camera lens
+            SetFOVState(CameraFOVState.Idle);
+            ApplyLensValues();
         }
 
-        void Update()
+        void LateUpdate()
         {
             HandleScrollZoom();
             HandleIdleSway();
             HandleDynamicFOV();
 
             // Re-apply Lens values every frame to prevent Cinemachine from overriding them
-            if (activeFOVState != CameraFOVState.Idle || true) // Actually always apply just to be safe
-                ApplyLensValues();
+            ApplyLensValues();
         }
 
         private void HandleDynamicFOV()
         {
-            if (!useDynamicFOV || playerMovement == null || fovTween != null) return;
+            if (!useDynamicFOV || playerMovement == null)
+            {
+                dynamicFOVAdd = Mathf.Lerp(dynamicFOVAdd, 0f, Time.deltaTime * 5f);
+                return;
+            }
 
-            float currentSpeed = playerMovement.rb.linearVelocity.magnitude;
-            float targetFOVAdd = Mathf.Clamp(currentSpeed * dynamicFOVSensitivity, 0, maxDynamicFOVAdd);
-            
-            // Smoothed return to profile FOV or base FOV
-            float targetBase = GetProfile(activeFOVState).fieldOfView;
-            currentFOV = Mathf.Lerp(currentFOV, targetBase + targetFOVAdd, Time.deltaTime * 5f);
+            // Exclude Y velocity so jumping/falling doesn't warp the FOV drastically.
+            Vector3 horizontalVelocity = new Vector3(playerMovement.rb.linearVelocity.x, 0, playerMovement.rb.linearVelocity.z);
+            float currentSpeed = horizontalVelocity.magnitude;
+
+            // Dynamic FOV should only add once we exceed normal walking speed
+            float speedThreshold = playerMovement.walkSpeed;
+            float targetFOVAdd = Mathf.Max(0, currentSpeed - speedThreshold) * dynamicFOVSensitivity;
+            targetFOVAdd = Mathf.Min(targetFOVAdd, maxDynamicFOVAdd);
+
+            dynamicFOVAdd = Mathf.Lerp(dynamicFOVAdd, targetFOVAdd, Time.deltaTime * 5f);
         }
 
         // ?? Scroll zoom (unchanged from original) ??????????????????????????
@@ -277,7 +295,7 @@ else
 
         private void HandleIdleSway()
         {
-            if (isIdle && offsetTween == null)
+            if (isIdle && offsetTween == null && cameraOffset != null)
             {
                 float offsetX = Mathf.PerlinNoise(Time.time * swaySpeed, 0f) * swayAmount - (swayAmount / 2f);
                 float offsetY = Mathf.PerlinNoise(0f, Time.time * swaySpeed) * swayAmount - (swayAmount / 2f);
@@ -290,6 +308,8 @@ else
         /// <summary>Adds an offset to the camera (e.g. during climbing or sliding).</summary>
         public void newOffset(bool offset)
         {
+            if (cameraOffset == null) return;
+
             _target = offset ? _offset : _default;
 
             offsetTween?.Kill();
@@ -323,15 +343,14 @@ else
         /// Overrides only the Dutch (roll) angle — used during wall running
         /// so the lean correctly mirrors the wall side without changing the FOV profile.
         /// </summary>
-        /// <param name="side">+1 = right wall lean, -1 = left wall lean, 0 = upright.</param>
-        public void SetWallRunTilt(float side)
+        /// <param name="angle">The exact angle to tilt the camera.</param>
+        public void SetWallRunTilt(float angle)
         {
-            float targetDutch = side * wallRunProfile.dutch;
+            float targetDutch = angle;
             dutchTween?.Kill();
             dutchTween = DOVirtual.Float(currentDutch, targetDutch, wallRunProfile.dutchBlendTime, v =>
             {
                 currentDutch = v;
-                ApplyLensValues();
             })
             .SetEase(wallRunProfile.dutchEase)
             .OnComplete(() => dutchTween = null);
@@ -373,23 +392,27 @@ else
         {
             switch (state)
             {
-                case CameraFOVState.Idle:    return new CameraStateProfile { fieldOfView = baseFOV, fovBlendTime = 0.5f, fovEase = Ease.OutCubic };
+                case CameraFOVState.Idle:    return idleProfile;
                 case CameraFOVState.Run:     return runProfile;
                 case CameraFOVState.WallRun: return wallRunProfile;
                 case CameraFOVState.Parkour: return parkourProfile;
                 case CameraFOVState.AirDash: return airDashProfile;
+                case CameraFOVState.Jump:    return jumpProfile;
+                case CameraFOVState.ChargeJump: return chargeJumpProfile;
                 default:                     return walkProfile;
             }
         }
 
         private void ApplyProfile(CameraStateProfile profile)
         {
-            // FOV tween
+            // Transition target is the profile's fieldOfView setting.
+            float targetFOV = profile.fieldOfView;
+            targetFOV = Mathf.Clamp(targetFOV, 1f, 175f);
+
             fovTween?.Kill();
-            fovTween = DOVirtual.Float(currentFOV, profile.fieldOfView, profile.fovBlendTime, v =>
+            fovTween = DOVirtual.Float(stateFOV, targetFOV, profile.fovBlendTime, v =>
             {
-                currentFOV = v;
-                ApplyLensValues();
+                stateFOV = v;
             })
             .SetEase(profile.fovEase)
             .OnComplete(() => fovTween = null);
@@ -399,7 +422,6 @@ else
             dutchTween = DOVirtual.Float(currentDutch, profile.dutch, profile.dutchBlendTime, v =>
             {
                 currentDutch = v;
-                ApplyLensValues();
             })
             .SetEase(profile.dutchEase)
             .OnComplete(() => dutchTween = null);
@@ -410,9 +432,26 @@ else
             if (freeLookCamera != null)
             {
                 var lens = freeLookCamera.Lens;
-                lens.FieldOfView = currentFOV;
-                lens.Dutch = currentDutch;
-                freeLookCamera.Lens = lens;
+
+                // If we're not actively tweening, make sure stateFOV tracks baseFOV changes in the inspector.
+                if (fovTween == null || !fovTween.IsActive())
+                {
+                    var profile = GetProfile(activeFOVState);
+                    stateFOV = profile.fieldOfView;
+                    stateFOV = Mathf.Clamp(stateFOV, 1f, 175f);
+                }
+
+                // Final FOV = Blended State FOV + Dynamic speed-based addition
+                float targetFOV = Mathf.Clamp(stateFOV + dynamicFOVAdd, 1f, 175f);
+
+                // Cinemachine 3.x explicitly rebuilds components or invalidates caches when Lens setter is called.
+                // We bypass assigning to it repeatedly if the values haven't noticeably changed.
+                if (Mathf.Abs(lens.FieldOfView - targetFOV) > 0.01f || Mathf.Abs(lens.Dutch - currentDutch) > 0.01f)
+                {
+                    lens.FieldOfView = targetFOV;
+                    lens.Dutch = currentDutch;
+                    freeLookCamera.Lens = lens;
+                }
             }
         }
     }

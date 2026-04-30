@@ -59,7 +59,10 @@ public float maxWallRunTime = 4.0f;
         private float currentWallRunSpeed;
         private float currentWallDistance;
         private const float probeOffset = 0.8f; // Probe is offset 0.8m AWAY from player center
-        private const float targetWallDistance = 1.22f; // Probe origin to wall surface (0.8m offset + 0.42m character radius)
+
+        [Header("Wall positioning")]
+        [Tooltip("Adjust this to make the character's legs touch the wall properly. E.g. probeOffset(0.8) + 0.15m = 0.95f")]
+        public float targetWallDistance = 0.95f; 
 
         private ClimbController climbController;
 
@@ -122,6 +125,11 @@ public float maxWallRunTime = 4.0f;
                 else if (characterInput.ConsumeJumpPressedBuffered())
                 {
                     WallKick();
+                }
+                else if (characterInput.run && characterInput.movement.y < -0.1f)
+                {
+                    if (thirdPersonController.characterDetection.showDebug) Debug.Log("[WallRun] Stopping: Shift + S pressed.");
+                    StopWallRun();
                 }
             }
         }
@@ -272,7 +280,7 @@ public float maxWallRunTime = 4.0f;
             SwapColliders(true);
 
             thirdPersonController.cameraController?.SetFOVState(CameraFOVState.WallRun);
-            thirdPersonController.cameraController?.SetWallRunTilt(sideVal * 20f);
+            thirdPersonController.cameraController?.SetWallRunTilt(sideVal * 15f);
 
             if (thirdPersonController.characterAnimation != null)
             {
@@ -322,14 +330,14 @@ public float maxWallRunTime = 4.0f;
             }
 
             // SNAPPY LATERAL CORRECTION (STICKINESS):
-            // targetWallDistance is 1.22m (0.8m probe offset + ~0.42m character radius).
+            // targetWallDistance is 1.05m (0.8m probe offset + ~0.25m distance from center).
             // We use the distance from the offset probe to target exactly that distance from the face.
             float lateralError = currentWallDistance - targetWallDistance;
             Vector3 horizontalNormal = new Vector3(wallNormal.x, 0, wallNormal.z).normalized;
             
             // Correction: strongly pull character to exactly the target distance
-            float correctionVelocity = -lateralError * 16f; 
-            correctionVelocity = Mathf.Clamp(correctionVelocity, -10f, 10f);
+            float correctionVelocity = -lateralError * 25f; 
+            correctionVelocity = Mathf.Clamp(correctionVelocity, -15f, 15f);
 
             rb.linearVelocity = finalVelocity + (horizontalNormal * correctionVelocity);
             }
@@ -348,7 +356,7 @@ public float maxWallRunTime = 4.0f;
 
             rb.linearVelocity = kickDir;
             thirdPersonController.ResetJumpTime();
-            characterMovement.DisableFeetIK();
+            characterMovement.EnableFeetIK();
 
             thirdPersonController.cameraController?.ShakeMedium();
             
@@ -445,7 +453,8 @@ public float maxWallRunTime = 4.0f;
                     if (currentDir == WallRunDirection.Left) targetUp = Quaternion.AngleAxis(-25f, wallForward) * Vector3.up;
                     else if (currentDir == WallRunDirection.Right) targetUp = Quaternion.AngleAxis(25f, wallForward) * Vector3.up;
 
-                    targetUp = Vector3.Slerp(targetUp, wallNormal + Vector3.up, 0.4f).normalized;
+                    // Blend up vector to push feet toward wall
+                    targetUp = Vector3.Slerp(targetUp, wallNormal + Vector3.up * 1.5f, 0.4f).normalized;
 
                     Quaternion targetRotation = Quaternion.LookRotation(wallForward, targetUp);
                     characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRotation, Time.deltaTime * modelRotationSpeed);

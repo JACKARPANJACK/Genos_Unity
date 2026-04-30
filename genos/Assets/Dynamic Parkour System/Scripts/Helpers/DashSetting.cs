@@ -14,7 +14,7 @@ namespace Climbing
         public float dashTime = 0.2f;
 
         [Tooltip("Peak force (velocity magnitude) applied at the start of the dash.")]
-        public float dashForce = 15f;
+        public float dashForce = 35f;
 
         [Tooltip("Force profile over normalised dash time (0-1). " +
                  "A curve that starts at 1 and decays to 0 gives the standard snap-and-decelerate feel.")]

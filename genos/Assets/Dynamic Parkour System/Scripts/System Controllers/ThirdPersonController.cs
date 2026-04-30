@@ -28,6 +28,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
+using Climbing.Effects;
 
 namespace Climbing
 {
@@ -37,10 +38,8 @@ namespace Climbing
     [RequireComponent(typeof(MovementCharacterController))]
     [RequireComponent(typeof(AnimationCharacterController))]
     [RequireComponent(typeof(DetectionCharacterController))]
-    [RequireComponent(typeof(CameraController))]
     [RequireComponent(typeof(VaultingController))]
     [RequireComponent(typeof(WallRunController))]
-
     public class ThirdPersonController : MonoBehaviour
     {
         [HideInInspector] public InputCharacterController characterInput;
@@ -60,7 +59,7 @@ namespace Climbing
         [HideInInspector] public ParkourState activeParkourState = ParkourState.None;
 
         [Header("Air Dash Settings")]
-        public DashSetting airDashSetting = new DashSetting { dashForce = 15f, dashTime = 0.2f, recoverTime = 0.4f };
+        public DashSetting airDashSetting = new DashSetting { dashForce = 35f, dashTime = 0.2f, recoverTime = 0.4f };
         public bool canAirDash = true;
         private bool hasAirDashed = false;
         private bool isAirDashing = false;
@@ -69,7 +68,7 @@ namespace Climbing
         private Tween airDashTween;
 
         [Header("Ground Dash Settings")]
-        public DashSetting groundDashSetting = new DashSetting { dashForce = 20f, dashTime = 0.25f, recoverTime = 0.3f };
+        public DashSetting groundDashSetting = new DashSetting { dashForce = 45f, dashTime = 0.25f, recoverTime = 0.3f };
         public bool canGroundDash = true;
         private bool isGroundDashing = false;
         private bool isGroundDashRecovering = false;
@@ -89,8 +88,27 @@ namespace Climbing
         public Transform mainCamera;
         public Transform freeCamera;
 
+        [Header("VFX Sockets")]
+        public Transform leftHandSocket;
+        public Transform rightHandSocket;
+        public Transform leftShoulderSocket;
+        public Transform rightShoulderSocket;
+
+        [Header("VFX Particle Systems")]
+        public GameObject dashVFX;
+        public GameObject chargeJumpVFX;
+        public GameObject jumpLaunchVFX; // New
+        public GameObject landingCrackVFX; // New
+        public GameObject electricityAfterImagePrefab;
+public Material afterImageMaterial;
+        public ParticleSystem electricityTrailPS;
+
+        private List<GameObject> activeDashEffects = new List<GameObject>();
+private float nextAfterImageTime = 0f;
+        public float afterImageInterval = 0.05f;
+
         [Header("Step Settings")]
-        [Range(0, 10.0f)] public float stepHeight = 0.8f;
+[Range(0, 10.0f)] public float stepHeight = 0.8f;
         public float stepVelocity = 0.2f;
 
         [Header("Colliders")]
@@ -124,8 +142,54 @@ namespace Climbing
         {
             characterMovement.OnLanded += characterAnimation.Land;
             characterMovement.OnLanded += () => cameraController?.ShakeMedium();
+            characterMovement.OnLanded += () => PlayVFXAtFeet(landingCrackVFX);
+            characterMovement.OnLanded += () => 
+            {
+                if (characterInput.run && characterInput.movement.sqrMagnitude > 0.01f)
+                    cameraController?.SetFOVState(CameraFOVState.Run);
+                else if (characterInput.movement.sqrMagnitude > 0.01f)
+                    cameraController?.SetFOVState(CameraFOVState.Walk);
+                else
+                    cameraController?.SetFOVState(CameraFOVState.Idle);
+            };
             characterMovement.OnFall += characterAnimation.Fall;
         }
+
+            private void PlayVFXAtFeet(GameObject vfx)
+            {
+                if (vfx == null) return;
+                Vector3 pos = transform.position;
+                // Ensure we spawn at the feet level
+                pos.y += 0.05f; 
+                
+                GameObject instance = Instantiate(vfx, pos, vfx.transform.rotation);
+                instance.layer = 0; // Force Default layer
+                foreach (Transform t in instance.GetComponentsInChildren<Transform>())
+                    t.gameObject.layer = 0;
+
+                if (characterDetection != null && characterDetection.showDebug)
+                    Debug.Log($"[VFX] Spawned {vfx.name} at {pos} on layer {instance.layer}");
+
+                // If the prefab has its own destruction logic (like DecalFadeOut), skip auto-destruction
+                if (instance.GetComponent<Climbing.Effects.DecalFadeOut>() != null)
+                    return;
+
+                float maxDuration = 2f;
+                var systems = instance.GetComponentsInChildren<ParticleSystem>();
+                if (systems.Length > 0)
+                {
+                    foreach (var ps in systems)
+                    {
+                        float duration = ps.main.duration + ps.main.startLifetime.constantMax;
+                        if (duration > maxDuration) maxDuration = duration;
+                    }
+                    Destroy(instance, maxDuration);
+                }
+                else
+                {
+                    Destroy(instance, 2f);
+                }
+            }
 
         void Update()
         {
@@ -210,7 +274,10 @@ namespace Climbing
             }
 
             if (isAirDashing)
+            {
+                UpdateAfterImages();
                 return; // Managed by DoTween
+            }
 
             if (canAirDash && !hasAirDashed && !isGrounded && !isVaulting && !IsParkourBusy)
             {
@@ -227,6 +294,8 @@ namespace Climbing
 
             hasAirDashed = true;
             isAirDashing = true;
+
+            SpawnHandEffects(dashVFX, airDashSetting.dashTime + 0.5f);
 
             airDashTween?.Kill();
 
@@ -263,7 +332,7 @@ namespace Climbing
                 airDashDirection = dashDir;
                 isBackDash = false; // Override backdash if we target a point
             }
-else if (camFwd.sqrMagnitude > 0.001f)
+            else if (camFwd.sqrMagnitude > 0.001f)
             {
                 if (hasInput)
                 {
@@ -274,32 +343,32 @@ else if (camFwd.sqrMagnitude > 0.001f)
                     dashDir = camFwd;
                 }
 
-                if (isBackDash)
+                airDashDirection = dashDir;
+
+                // Determine if we should rotate the character to face the dash direction or keep camera facing
+                // Side/Back dashes typically keep the character facing forward (camera direction)
+                float angle = Vector3.Angle(camFwd, dashDir);
+                if (angle > 45f)
                 {
-                    // If we dash backwards, we still face forward towards the camera
                     transform.rotation = Quaternion.LookRotation(camFwd, Vector3.up);
-                    airDashDirection = dashDir;
                 }
                 else
                 {
                     transform.rotation = Quaternion.LookRotation(dashDir, Vector3.up);
-                    airDashDirection = dashDir;
                 }
             }
             else
             {
                 // Fallback
-                if (isBackDash)
-                    airDashDirection = -transform.forward;
-                else
-                    airDashDirection = transform.forward;
+                airDashDirection = isBackDash ? -transform.forward : transform.forward;
             }
 
             // Turn off IK during dash
             characterMovement.DisableFeetIK();
 
-            // Play appropriate animation via unified controller
-            characterAnimation.Dash(isBackDash);
+            // Calculate directional animation based on the dash direction relative to current rotation
+            var dashDirAnim = GetDashDirection(airDashDirection);
+            characterAnimation.Dash(dashDirAnim);
             characterAnimation.SetDashing(true);
 
             characterMovement.stopMotion = true;
@@ -331,6 +400,8 @@ else if (camFwd.sqrMagnitude > 0.001f)
             {
                 isAirDashing = false;
                 characterAnimation.SetDashing(false);
+                ClearDashEffects();
+                StopElectricityEffects();
                 ClearParkourState(ParkourState.Dashing);
                 characterMovement.stopMotion = false;
                 airDashRecoverTimer = airDashSetting.recoverTime;
@@ -340,6 +411,8 @@ else if (camFwd.sqrMagnitude > 0.001f)
             {
                 isAirDashing = false;
                 characterAnimation?.SetDashing(false);
+                ClearDashEffects();
+                StopElectricityEffects();
                 ClearParkourState(ParkourState.Dashing);
                 if (characterMovement != null) 
                 {
@@ -347,7 +420,7 @@ else if (camFwd.sqrMagnitude > 0.001f)
                 }
                 cameraController?.SetFOVState(CameraFOVState.Walk);
             });
-        }
+}
 
         private void HandleGroundDash()
         {
@@ -359,7 +432,9 @@ else if (camFwd.sqrMagnitude > 0.001f)
                     isGroundDashRecovering = false;
             }
 
-            if (!isGrounded || isVaulting || IsParkourBusy || (wallRunController != null && wallRunController.isWallRunning))
+            // Fix: Only cancel if we enter a conflicting state (Vault, WallRun), 
+            // but NOT just because isGrounded is false for a frame (jitter).
+            if (isVaulting || (wallRunController != null && wallRunController.isWallRunning))
             {
                 if (isGroundDashing)
                 {
@@ -370,19 +445,63 @@ else if (camFwd.sqrMagnitude > 0.001f)
             }
 
             if (isGroundDashing)
-                return; // Let DoTween manage velocity updates inside FixedUpdate via SetUpdate(Fixed)
+            {
+                UpdateAfterImages();
+                return; // Managed by DoTween
+            }
 
-            if (canGroundDash && !isGroundDashRecovering && (characterInput.ConsumeDoubleTapDashBuffered() || characterInput.ConsumeDashPressedBuffered()))
+            if (isGrounded && canGroundDash && !isGroundDashRecovering && (characterInput.ConsumeDoubleTapDashBuffered() || characterInput.ConsumeDashPressedBuffered()))
             {
                 PerformGroundDash();
             }
         }
+
+        private void UpdateAfterImages()
+        {
+            if (electricityTrailPS != null && !electricityTrailPS.isEmitting)
+                electricityTrailPS.Play();
+
+            if (Time.time >= nextAfterImageTime)
+            {
+                SpawnAfterImage();
+                nextAfterImageTime = Time.time + afterImageInterval;
+            }
+        }
+
+        private void StopElectricityEffects()
+        {
+            if (electricityTrailPS != null) electricityTrailPS.Stop();
+        }
+
+        private void SpawnAfterImage()
+        {
+            if (electricityAfterImagePrefab == null) return;
+
+            // Get the current mesh snapshot from the character
+            SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>();
+            foreach (var smr in renderers)
+            {
+                if (!smr.gameObject.activeInHierarchy || !smr.enabled) continue;
+
+                Mesh mesh = new Mesh();
+                smr.BakeMesh(mesh);
+
+                GameObject go = Instantiate(electricityAfterImagePrefab);
+                var ai = go.GetComponent<Climbing.Effects.PlayerAfterImage>();
+                if (ai == null) ai = go.AddComponent<Climbing.Effects.PlayerAfterImage>();
+
+                ai.Setup(mesh, smr.transform.position, smr.transform.rotation, afterImageMaterial != null ? afterImageMaterial : smr.sharedMaterial, new Color(0, 0.8f, 1f, 0.6f));
+                }
+                }
 
         private void PerformGroundDash()
         {
             if (!TrySetParkourState(ParkourState.Dashing)) return;
 
             isGroundDashing = true;
+
+            SpawnHandEffects(dashVFX, groundDashSetting.dashTime + 0.5f);
+
             groundDashTween?.Kill();
 
             // Find target parkour point - 15m range
@@ -410,7 +529,7 @@ else if (camFwd.sqrMagnitude > 0.001f)
                 overrideDashForce = Mathf.Min(dist / groundDashSetting.dashTime, 60f);
 
                 transform.rotation = Quaternion.LookRotation(new Vector3(dashDir.x, 0, dashDir.z), Vector3.up);
-groundDashDirection = dashDir;
+                groundDashDirection = dashDir;
                 isBackDash = false;
             }
             else if (camFwd.sqrMagnitude > 0.001f)
@@ -424,33 +543,31 @@ groundDashDirection = dashDir;
                     dashDir = camFwd;
                 }
 
-                if (isBackDash)
+                groundDashDirection = dashDir;
+
+                // Determine if we should rotate to face dash or keep camera facing (for side/back dashes)
+                float angle = Vector3.Angle(camFwd, dashDir);
+                if (angle > 45f)
                 {
-                    // Back dash keeps character looking forward
                     transform.rotation = Quaternion.LookRotation(camFwd, Vector3.up);
-                    groundDashDirection = dashDir;
                 }
                 else
                 {
-                    // Normal dashes orient the character to where they are moving
                     transform.rotation = Quaternion.LookRotation(dashDir, Vector3.up);
-                    groundDashDirection = dashDir;
                 }
             }
             else
             {
                 // Fallback
-                if (isBackDash)
-                    groundDashDirection = -transform.forward;
-                else
-                    groundDashDirection = transform.forward;
+                groundDashDirection = isBackDash ? -transform.forward : transform.forward;
             }
 
             // Turn off IK
             characterMovement.DisableFeetIK();
 
-            // Play appropriate animation via unified controller
-            characterAnimation.Dash(isBackDash);
+            // Calculate directional animation
+            var dashDirAnim = GetDashDirection(groundDashDirection);
+            characterAnimation.Dash(dashDirAnim);
             characterAnimation.SetDashing(true);
 
             characterMovement.stopMotion = true;
@@ -477,6 +594,7 @@ groundDashDirection = dashDir;
                 isGroundDashing = false;
                 characterAnimation.SetDashing(false);
                 ClearParkourState(ParkourState.Dashing);
+                StopElectricityEffects();
                 characterMovement.stopMotion = false;
                 isGroundDashRecovering = true;
                 groundDashRecoverTimer = groundDashSetting.recoverTime;
@@ -487,13 +605,14 @@ groundDashDirection = dashDir;
                 isGroundDashing = false;
                 characterAnimation?.SetDashing(false);
                 ClearParkourState(ParkourState.Dashing);
+                StopElectricityEffects();
                 if (characterMovement != null) 
                 {
                     characterMovement.stopMotion = false;
                 }
                 cameraController?.SetFOVState(CameraFOVState.Walk);
             });
-        }
+}
 
         /// <summary>
         /// Explicitly triggers a backward dash, pushing the player away from their current facing direction.
@@ -546,9 +665,11 @@ cameraController?.SetCameraRotationLock(true);
                 if (!TrySetParkourState(ParkourState.Dashing)) return;
 
                 isGroundDashing = true;
+                PlayVFX(dashVFX);
+                SpawnHandEffects(dashVFX);
                 groundDashTween?.Kill();
                 groundDashDirection = dashDir;
-                characterAnimation.Dash(true);
+                characterAnimation.Dash(AnimationCharacterController.DashDirection.Backward);
                 characterAnimation.SetDashing(true);
                 
                 characterMovement.stopMotion = true;
@@ -587,13 +708,19 @@ cameraController?.SetCameraRotationLock(true);
                 }
                 else if (!hasAirDashed)
                 {
-                if (!TrySetParkourState(ParkourState.Dashing)) return;
+                    if (!TrySetParkourState(ParkourState.Dashing)) return;
+
+                    // Depending on settings or velocity, map appropriately. 
+                    // Let's default Dash/Jump calls to the explicit ChargeJump/Jump profile here directly.
+                    cameraController?.SetFOVState(CameraFOVState.ChargeJump);
 
                 hasAirDashed = true;
                 isAirDashing = true;
+                PlayVFX(dashVFX);
+                SpawnHandEffects(dashVFX);
                 airDashTween?.Kill();
                 airDashDirection = dashDir;
-                characterAnimation.Dash(true);
+                characterAnimation.Dash(AnimationCharacterController.DashDirection.Backward);
                 characterAnimation.SetDashing(true);
                 
                 characterMovement.stopMotion = true;
@@ -670,6 +797,11 @@ else
                 jumpChargeTimer += Time.deltaTime;
                 jumpChargeTimer = Mathf.Clamp(jumpChargeTimer, 0f, maxJumpChargeTime);
                 characterAnimation.animator.SetFloat("jumpChargeRatio", jumpChargeTimer / maxJumpChargeTime);
+
+                // Set FOV to 'ChargeJump' while holding
+                if (jumpChargeTimer > 0.1f)
+                    cameraController?.SetFOVState(CameraFOVState.ChargeJump);
+
                 return;
             }
 
@@ -687,12 +819,21 @@ else
 
         private void ManualJump(float chargeRatio)
         {
+            if (chargeRatio > 0.1f)
+            {
+                PlayVFX(chargeJumpVFX);
+                if (chargeRatio > 0.5f) StartCoroutine(AfterImageBurst(0.3f));
+            }
+
+            PlayVFXAtFeet(jumpLaunchVFX);
+
             isJumping = true;
             onAir = true;
             isGrounded = false;
             lastJumpTime = Time.time;
 
             cameraController?.ShakeLight();
+            cameraController?.SetFOVState(CameraFOVState.Jump);
 
             // Set animation trigger via unified controller
             characterAnimation.Jump();
@@ -714,8 +855,18 @@ else
             characterMovement.Fall();
         }
 
-        public Point FindNearestParkourPoint(float maxDistance, float maxAngle)
+        private IEnumerator AfterImageBurst(float duration)
         {
+            float end = Time.time + duration;
+            while (Time.time < end)
+            {
+                UpdateAfterImages();
+                yield return new WaitForSeconds(afterImageInterval);
+            }
+        }
+
+        public Point FindNearestParkourPoint(float maxDistance, float maxAngle)
+{
             Point[] allPoints = UnityEngine.Object.FindObjectsByType<Point>(FindObjectsSortMode.None);
             Point bestPoint = null;
             float closestDist = maxDistance;
@@ -761,9 +912,25 @@ else
             if (activeParkourState == ParkourState.WallRunning) return false;
             
             return characterDetection.IsGrounded(stepHeight);
-        }
+            }
 
-        public void AddMovementInput(Vector2 direction)
+            private AnimationCharacterController.DashDirection GetDashDirection(Vector3 dashDir)
+            {
+            Vector3 localDash = transform.InverseTransformDirection(dashDir);
+            float forward = localDash.z;
+            float right = localDash.x;
+
+            if (Mathf.Abs(forward) > Mathf.Abs(right))
+            {
+                return (forward > -0.1f) ? AnimationCharacterController.DashDirection.Forward : AnimationCharacterController.DashDirection.Backward;
+            }
+            else
+            {
+                return (right > 0) ? AnimationCharacterController.DashDirection.Right : AnimationCharacterController.DashDirection.Left;
+            }
+            }
+
+            public void AddMovementInput(Vector2 direction)
         {
             Vector3 translation = Vector3.zero;
 
@@ -939,5 +1106,122 @@ else
             dummy = false; 
             allowMovement = true;
         }
-    }
+
+        private void PlayVFX(GameObject vfx)
+        {
+            if (vfx == null) return;
+
+            if (vfx.scene.IsValid()) // In Scene
+            {
+                foreach (var ps in vfx.GetComponentsInChildren<ParticleSystem>())
+                {
+                    ps.Play();
+                }
+            }
+            else // Prefab
+            {
+                GameObject instance = Instantiate(vfx, transform, false);
+                instance.transform.localPosition = Vector3.zero;
+                instance.transform.localRotation = Quaternion.identity;
+
+                float maxDuration = 2f;
+                foreach (var ps in instance.GetComponentsInChildren<ParticleSystem>())
+                {
+                    ps.Play();
+                    float duration = ps.main.duration + ps.main.startLifetime.constantMax;
+                    if (duration > maxDuration) maxDuration = duration;
+                }
+                Destroy(instance, maxDuration);
+            }
+        }
+
+        private void SpawnHandEffects(GameObject vfx, float durationOverride = -1f)
+        {
+            if (vfx == null) return;
+
+            // Ensure sockets are assigned if null
+            if (leftHandSocket == null || rightHandSocket == null || leftShoulderSocket == null || rightShoulderSocket == null)
+            {
+                AutoAssignSockets();
+            }
+
+            GameObject left = null;
+            GameObject right = null;
+            GameObject leftShoulder = null;
+            GameObject rightShoulder = null;
+
+            if (leftHandSocket != null)
+            {
+                left = Instantiate(vfx, leftHandSocket, false);
+                left.transform.localPosition = Vector3.zero;
+                left.transform.localRotation = Quaternion.identity;
+                activeDashEffects.Add(left);
+            }
+
+            if (rightHandSocket != null)
+            {
+                right = Instantiate(vfx, rightHandSocket, false);
+                right.transform.localPosition = Vector3.zero;
+                right.transform.localRotation = Quaternion.identity;
+                activeDashEffects.Add(right);
+            }
+
+            if (leftShoulderSocket != null)
+            {
+                leftShoulder = Instantiate(vfx, leftShoulderSocket, false);
+                leftShoulder.transform.localPosition = Vector3.zero;
+                leftShoulder.transform.localRotation = Quaternion.identity;
+                activeDashEffects.Add(leftShoulder);
+            }
+
+            if (rightShoulderSocket != null)
+            {
+                rightShoulder = Instantiate(vfx, rightShoulderSocket, false);
+                rightShoulder.transform.localPosition = Vector3.zero;
+                rightShoulder.transform.localRotation = Quaternion.identity;
+                activeDashEffects.Add(rightShoulder);
+            }
+
+            float maxDuration = durationOverride > 0f ? durationOverride : 2f;
+            if (durationOverride <= 0f)
+            {
+                foreach (var ps in vfx.GetComponentsInChildren<ParticleSystem>())
+                {
+                    float duration = ps.main.duration + ps.main.startLifetime.constantMax;
+                    if (duration > maxDuration) maxDuration = duration;
+                }
+            }
+
+            if (left != null) Destroy(left, maxDuration);
+            if (right != null) Destroy(right, maxDuration);
+            if (leftShoulder != null) Destroy(leftShoulder, maxDuration);
+            if (rightShoulder != null) Destroy(rightShoulder, maxDuration);
+        }
+
+        private void ClearDashEffects()
+        {
+            foreach (var fx in activeDashEffects)
+            {
+                if (fx != null) Destroy(fx);
+            }
+            activeDashEffects.Clear();
+        }
+
+        private void AutoAssignSockets()
+        {
+            if (characterAnimation == null || characterAnimation.animator == null) return;
+            var anim = characterAnimation.animator;
+
+            if (leftHandSocket == null) leftHandSocket = anim.GetBoneTransform(HumanBodyBones.LeftHand);
+            if (rightHandSocket == null) rightHandSocket = anim.GetBoneTransform(HumanBodyBones.RightHand);
+
+            // Shoulders: Default to UpperArm because LeftShoulder in Unity is exactly the clavicle, making thrusters spawn inside the chest instead of the actual shoulder edge.
+            if (leftShoulderSocket == null) leftShoulderSocket = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            if (rightShoulderSocket == null) rightShoulderSocket = anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+
+            // Fallback for shoulders if UpperArm is missing
+            if (leftShoulderSocket == null) leftShoulderSocket = anim.GetBoneTransform(HumanBodyBones.LeftShoulder);
+            if (rightShoulderSocket == null) rightShoulderSocket = anim.GetBoneTransform(HumanBodyBones.RightShoulder);
+        }
 }
+        }

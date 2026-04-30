@@ -185,9 +185,29 @@ namespace Climbing
             controller.EnableController();
         }
 
-        public void Dash(bool isBackDash)
+        public enum DashDirection { Forward, Backward, Left, Right }
+
+        public void Dash(DashDirection direction)
         {
-            string stateName = isBackDash ? "Dash_BWD" : "Dash";
+            string stateName = "Dash";
+            switch (direction)
+            {
+                case DashDirection.Backward: stateName = "Dash_BWD"; break;
+                case DashDirection.Left: stateName = "Dash_L"; break;
+                case DashDirection.Right: stateName = "Dash_R"; break;
+                case DashDirection.Forward: stateName = "Dash"; break;
+            }
+
+            // Fallback check if the animator doesn't have the specific directional state
+            if (!HasState(stateName))
+            {
+                // If Dash_BWD/L/R is missing, we try "Dash" as generic fallback
+                if (direction != DashDirection.Forward)
+                {
+                    stateName = "Dash";
+                }
+            }
+
             animator.CrossFadeInFixedTime(stateName, 0.1f);
         }
 
