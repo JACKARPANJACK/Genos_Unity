@@ -1,4 +1,4 @@
-﻿/*
+/*
 MIT License
 
 Copyright (c) 2023 Èric Canela
@@ -40,21 +40,42 @@ namespace Climbing
         [HideInInspector] public bool jump;
         [HideInInspector] public bool drop;
         [HideInInspector] public bool dash;
+        [HideInInspector] public bool aim;
+        [HideInInspector] public bool fire;
         [HideInInspector] public bool doubleTapDashTriggered;
+        private float _cycleDelta;
+        private bool cycleDeltaConsumed = false;
+
+        public float GetCycleDelta()
+        {
+            if (cycleDeltaConsumed) return 0f;
+            return _cycleDelta;
+        }
+
+        public void ConsumeCycleDelta()
+        {
+            cycleDeltaConsumed = true;
+        }
 
         private bool _runHeld = false;
-        private bool _jumpHeld = false;
+private bool _jumpHeld = false;
         private bool _dropHeld = false;
         private bool _dashHeld = false;
+        private bool _aimHeld = false;
+        private bool _fireHeld = false;
+
         private InputAction dashAction;
         private float lastJumpPressedTime = float.NegativeInfinity;
         private float lastJumpReleasedTime = float.NegativeInfinity;
         private float lastDropPressedTime = float.NegativeInfinity;
         private float lastDashPressedTime = float.NegativeInfinity;
+        private float lastFirePressedTime = float.NegativeInfinity;
+
         private float consumedJumpPressedTime = float.NegativeInfinity;
         private float consumedJumpReleasedTime = float.NegativeInfinity;
         private float consumedDropPressedTime = float.NegativeInfinity;
         private float consumedDashPressedTime = float.NegativeInfinity;
+        private float consumedFirePressedTime = float.NegativeInfinity;
 
         [Header("Double Tap Settings")]
         public float doubleTapTimeFrame = 0.3f;
@@ -82,73 +103,55 @@ namespace Climbing
 
         void Awake()
         {
-            // Hold and Release tracking for unified modifier logic
             controls = new PlayerControls();
 
             // Movement
             controls.Player.Movement.performed += ctx =>
             {
                 Vector2 newMove = ctx.ReadValue<Vector2>();
-
-                // Track double tapping direction (only care if it's a decisive push)
                 if (newMove.sqrMagnitude > 0.5f)
                 {
                     if (Time.time - lastMovementPressTime <= doubleTapTimeFrame)
                     {
-                        // Check if we pushed in same general direction and released in between (or deeply lowered input)
                         float dot = Vector2.Dot(newMove.normalized, currentMovementDirection);
-                        if (dot > 0.7f && lastMovementInput.sqrMagnitude < 0.3f) 
-                        {
-                            doubleTapDashTriggered = true;
-                        }
+                        if (dot > 0.7f && lastMovementInput.sqrMagnitude < 0.3f) doubleTapDashTriggered = true;
                     }
-
                     currentMovementDirection = newMove.normalized;
                     lastMovementPressTime = Time.time;
                 }
-
                 movement = newMove;
                 lastMovementInput = newMove;
             };
-
-            controls.Player.Movement.canceled += ctx =>
-            {
-                movement = Vector2.zero;
-                lastMovementInput = Vector2.zero;
-            };
+            controls.Player.Movement.canceled += ctx => { movement = Vector2.zero; lastMovementInput = Vector2.zero; };
 
             // Jump
-            controls.Player.Jump.performed += ctx =>
-            {
-                _jumpHeld = true;
-                lastJumpPressedTime = Time.time;
-            };
-            controls.Player.Jump.canceled += ctx =>
-            {
-                _jumpHeld = false;
-                lastJumpReleasedTime = Time.time;
-            };
+            controls.Player.Jump.performed += ctx => { _jumpHeld = true; lastJumpPressedTime = Time.time; };
+            controls.Player.Jump.canceled += ctx => { _jumpHeld = false; lastJumpReleasedTime = Time.time; };
 
             // Drop
-            controls.Player.Drop.performed += ctx =>
-            {
-                _dropHeld = true;
-                lastDropPressedTime = Time.time;
-            };
+            controls.Player.Drop.performed += ctx => { _dropHeld = true; lastDropPressedTime = Time.time; };
             controls.Player.Drop.canceled += ctx => _dropHeld = false;
 
-            // Run (Our unified Shift Modifier)
+            // Run
             controls.Player.Run.performed += ctx => _runHeld = true;
             controls.Player.Run.canceled += ctx => _runHeld = false;
 
             // Dash
             dashAction = controls.Player.Dash;
-            controls.Player.Dash.performed += ctx =>
-            {
-                _dashHeld = true;
-                lastDashPressedTime = Time.time;
-            };
+            controls.Player.Dash.performed += ctx => { _dashHeld = true; lastDashPressedTime = Time.time; };
             controls.Player.Dash.canceled += ctx => _dashHeld = false;
+
+            // Aim
+            controls.Player.Aim.performed += ctx => _aimHeld = true;
+            controls.Player.Aim.canceled += ctx => _aimHeld = false;
+
+            // Fire
+            controls.Player.Fire.performed += ctx => { _fireHeld = true; lastFirePressedTime = Time.time; };
+            controls.Player.Fire.canceled += ctx => _fireHeld = false;
+
+            // Cycle
+            controls.Player.CycleMode.performed += ctx => { _cycleDelta = ctx.ReadValue<float>(); cycleDeltaConsumed = false; };
+            controls.Player.CycleMode.canceled += ctx => { _cycleDelta = 0; cycleDeltaConsumed = false; };
 
             // Exit
             controls.GameManager.Exit.performed += ctx => Exit();
@@ -156,96 +159,46 @@ namespace Climbing
 
         private void Update()
         {
-            // Unified Shift Modifier Logic:
-            // Holding 'Run' activates running dynamically context-sensitive!
             run = _runHeld;
             jump = _jumpHeld;
             drop = _dropHeld;
             dash = _dashHeld;
+            aim = _aimHeld;
+            fire = _fireHeld;
 
-            // Allow dash button fallback directly tied to doubleTap variable for safety
-            if (ConsumeDashPressedBuffered())
-            {
-                doubleTapDashTriggered = true;
-            }
+            if (ConsumeDashPressedBuffered()) doubleTapDashTriggered = true;
         }
 
-        private void OnDestroy()
-        {
-            if (controls != null)
-            {
-                controls.Dispose();
-            }
-        }
+        private void OnDestroy() { if (controls != null) controls.Dispose(); }
+        void Exit() => Application.Quit();
 
-        void Exit()
-        {
-            Application.Quit();
-        }
-
-        public bool JumpPressedBuffered(float customBuffer = -1f)
-        {
-            return IsBuffered(lastJumpPressedTime, customBuffer);
-        }
-
+        public bool JumpPressedBuffered(float customBuffer = -1f) => IsBuffered(lastJumpPressedTime, customBuffer);
         public bool ConsumeJumpPressedBuffered(float customBuffer = -1f)
         {
-            if (!JumpPressedBuffered(customBuffer) || consumedJumpPressedTime == lastJumpPressedTime)
-                return false;
-
+            if (!JumpPressedBuffered(customBuffer) || consumedJumpPressedTime == lastJumpPressedTime) return false;
             consumedJumpPressedTime = lastJumpPressedTime;
             return true;
         }
 
-        public bool JumpReleasedBuffered(float customBuffer = -1f)
-        {
-            return IsBuffered(lastJumpReleasedTime, customBuffer);
-        }
-
-        public bool ConsumeJumpReleasedBuffered(float customBuffer = -1f)
-        {
-            if (!JumpReleasedBuffered(customBuffer) || consumedJumpReleasedTime == lastJumpReleasedTime)
-                return false;
-
-            consumedJumpReleasedTime = lastJumpReleasedTime;
-            return true;
-        }
-
-        public bool DropPressedBuffered(float customBuffer = -1f)
-        {
-            return IsBuffered(lastDropPressedTime, customBuffer);
-        }
-
-        public bool ConsumeDropPressedBuffered(float customBuffer = -1f)
-        {
-            if (!DropPressedBuffered(customBuffer) || consumedDropPressedTime == lastDropPressedTime)
-                return false;
-
-            consumedDropPressedTime = lastDropPressedTime;
-            return true;
-        }
-
-        public bool DashPressedBuffered(float customBuffer = -1f)
-        {
-            return IsBuffered(lastDashPressedTime, customBuffer);
-        }
-
+        public bool DashPressedBuffered(float customBuffer = -1f) => IsBuffered(lastDashPressedTime, customBuffer);
         public bool ConsumeDashPressedBuffered(float customBuffer = -1f)
         {
-            if (!DashPressedBuffered(customBuffer) || consumedDashPressedTime == lastDashPressedTime)
-                return false;
-
+            if (!DashPressedBuffered(customBuffer) || consumedDashPressedTime == lastDashPressedTime) return false;
             consumedDashPressedTime = lastDashPressedTime;
+            return true;
+        }
+
+        public bool FirePressedBuffered(float customBuffer = -1f) => IsBuffered(lastFirePressedTime, customBuffer);
+        public bool ConsumeFirePressedBuffered(float customBuffer = -1f)
+        {
+            if (!FirePressedBuffered(customBuffer) || consumedFirePressedTime == lastFirePressedTime) return false;
+            consumedFirePressedTime = lastFirePressedTime;
             return true;
         }
 
         public bool ConsumeDoubleTapDashBuffered(float customBuffer = -1f)
         {
-            if (doubleTapDashTriggered)
-            {
-                doubleTapDashTriggered = false; // Consume it
-                return true;
-            }
+            if (doubleTapDashTriggered) { doubleTapDashTriggered = false; return true; }
             return false;
         }
 
@@ -255,5 +208,4 @@ namespace Climbing
             return Time.time - timestamp <= buffer;
         }
     }
-
 }

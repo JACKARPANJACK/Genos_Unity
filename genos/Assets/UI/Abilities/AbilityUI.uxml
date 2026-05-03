@@ -1,0 +1,14 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:engine="UnityEngine.UIElements">
+    <ui:Style src="AbilityUI.uss" />
+    <ui:VisualElement name="root" class="root" picking-mode="Ignore">
+        <ui:VisualElement name="crosshair" class="crosshair" picking-mode="Ignore" />
+        
+        <ui:VisualElement name="notificationContainer" class="notification-container" picking-mode="Ignore">
+            <ui:Label name="notificationLabel" class="notification-label" text="" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="weaponContainer" class="weapon-container" picking-mode="Ignore">
+            <ui:Label name="weaponLabel" class="weapon-label" text="Normal Rocket Arm" picking-mode="Ignore" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

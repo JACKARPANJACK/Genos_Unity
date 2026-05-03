@@ -33,7 +33,7 @@ namespace Climbing
     // ?? State enum ??????????????????????????????????????????????????????????????
 
     /// <summary>Named movement states that each carry their own camera profile.</summary>
-    public enum CameraFOVState { Idle, Walk, Run, WallRun, Parkour, AirDash, Jump, ChargeJump }
+    public enum CameraFOVState { Idle, Walk, Run, WallRun, Parkour, AirDash, Jump, ChargeJump, Aim }
 
     // ?? Data types ??????????????????????????????????????????????????????????????
 
@@ -105,6 +105,19 @@ namespace Climbing
         private float originalRadius = 2.5f;
         private float[] originalRadii = new float[3] { 2.5f, 3.5f, 1.5f };
 
+        [Header("Aiming Settings")]
+        public int aimPriority = 20;
+        public Vector3 aimShoulderOffset = new Vector3(0.65f, 0.4f, -0.3f);
+        private Vector3 currentShoulderOffset;
+
+        [Header("Manual Zoom")]
+        public float minFOV = 15f;
+        public float maxFOV = 60f;
+        public float zoomSensitivity = 2f;
+        private float manualFOVOffset = 0f;
+        private float manualDistanceOffset = 0f;
+        private CinemachineCamera aimCamera;
+
         // ?? FOV & Dutch profiles ????????????????????????????????????????????
 
         [Header("Base FOV")]
@@ -137,6 +150,10 @@ namespace Climbing
         {
             fieldOfView = 150f, fovBlendTime = 0.1f, fovEase = Ease.OutExpo
         };
+        public CameraStateProfile aimProfile = new CameraStateProfile 
+        { 
+            fieldOfView = 30f, fovBlendTime = 0.1f 
+        };
 
         // ?? Camera shake ????????????????????????????????????????????????????
 
@@ -156,6 +173,8 @@ namespace Climbing
         private float stateFOV;
         private float dynamicFOVAdd;
         private float currentDutch;
+
+        public CameraFOVState ActiveFOVState => activeFOVState;
         private CameraFOVState activeFOVState = (CameraFOVState)(-1);
         private Tween fovTween;
         private Tween dutchTween;
@@ -181,6 +200,9 @@ namespace Climbing
             }
 
             playerMovement = GameObject.FindAnyObjectByType<MovementCharacterController>();
+
+            var aimGo = GameObject.Find("AimCam");
+            if (aimGo != null) aimCamera = aimGo.GetComponent<CinemachineCamera>();
 
             freeLookCamera = GetComponent<CinemachineCamera>();
             if (freeLookCamera != null)
@@ -218,9 +240,29 @@ namespace Climbing
             HandleScrollZoom();
             HandleIdleSway();
             HandleDynamicFOV();
+            UpdatePriorities();
+            ApplyOffsets();
 
             // Re-apply Lens values every frame to prevent Cinemachine from overriding them
             ApplyLensValues();
+        }
+
+        private void UpdatePriorities()
+        {
+            if (aimCamera != null)
+            {
+                aimCamera.Priority.Value = (activeFOVState == CameraFOVState.Aim) ? aimPriority : 0;
+            }
+        }
+
+        private void ApplyOffsets()
+        {
+            if (cameraOffset != null)
+            {
+                Vector3 targetOffset = (activeFOVState == CameraFOVState.Aim) ? aimShoulderOffset : Vector3.zero;
+                currentShoulderOffset = Vector3.Lerp(currentShoulderOffset, targetOffset, Time.deltaTime * 25f);
+                cameraOffset.Offset = baseOffset + currentShoulderOffset;
+            }
         }
 
         private void HandleDynamicFOV()
@@ -266,8 +308,16 @@ namespace Climbing
 
             if (Mathf.Abs(scrollDelta) > 0.01f)
             {
-                currentZoom -= Mathf.Clamp(scrollDelta, -1f, 1f) * (zoomSpeed * 0.25f);
-                currentZoom = Mathf.Clamp(currentZoom, minZoom, maxZoom);
+                if (activeFOVState == CameraFOVState.Aim)
+                {
+                    manualFOVOffset -= Mathf.Clamp(scrollDelta, -1f, 1f) * zoomSensitivity * 2f;
+                    manualFOVOffset = Mathf.Clamp(manualFOVOffset, -15f, 15f);
+                }
+                else
+                {
+                    currentZoom -= Mathf.Clamp(scrollDelta, -1f, 1f) * (zoomSpeed * 0.25f);
+                    currentZoom = Mathf.Clamp(currentZoom, minZoom, maxZoom);
+                }
             }
 
             var orbitalFollow = freeLookCamera.GetComponent<CinemachineOrbitalFollow>();
@@ -399,6 +449,7 @@ namespace Climbing
                 case CameraFOVState.AirDash: return airDashProfile;
                 case CameraFOVState.Jump:    return jumpProfile;
                 case CameraFOVState.ChargeJump: return chargeJumpProfile;
+                case CameraFOVState.Aim:     return aimProfile;
                 default:                     return walkProfile;
             }
         }
@@ -429,28 +480,43 @@ namespace Climbing
 
         private void ApplyLensValues()
         {
+            float finalTargetFOV = stateFOV;
+
+            // If we're not actively tweening, make sure stateFOV tracks baseFOV changes in the inspector.
+            if (fovTween == null || !fovTween.IsActive())
+            {
+                var profile = GetProfile(activeFOVState);
+                stateFOV = profile.fieldOfView;
+                stateFOV = Mathf.Clamp(stateFOV, 1f, 175f);
+            }
+
+            // Final FOV = Blended State FOV + Dynamic speed-based addition + manual zoom FOV
+            finalTargetFOV = Mathf.Clamp(stateFOV + dynamicFOVAdd + manualFOVOffset, 1f, 175f);
+
             if (freeLookCamera != null)
             {
                 var lens = freeLookCamera.Lens;
-
-                // If we're not actively tweening, make sure stateFOV tracks baseFOV changes in the inspector.
-                if (fovTween == null || !fovTween.IsActive())
+                if (Mathf.Abs(lens.FieldOfView - finalTargetFOV) > 0.01f || Mathf.Abs(lens.Dutch - currentDutch) > 0.01f)
                 {
-                    var profile = GetProfile(activeFOVState);
-                    stateFOV = profile.fieldOfView;
-                    stateFOV = Mathf.Clamp(stateFOV, 1f, 175f);
-                }
-
-                // Final FOV = Blended State FOV + Dynamic speed-based addition
-                float targetFOV = Mathf.Clamp(stateFOV + dynamicFOVAdd, 1f, 175f);
-
-                // Cinemachine 3.x explicitly rebuilds components or invalidates caches when Lens setter is called.
-                // We bypass assigning to it repeatedly if the values haven't noticeably changed.
-                if (Mathf.Abs(lens.FieldOfView - targetFOV) > 0.01f || Mathf.Abs(lens.Dutch - currentDutch) > 0.01f)
-                {
-                    lens.FieldOfView = targetFOV;
+                    lens.FieldOfView = finalTargetFOV;
                     lens.Dutch = currentDutch;
                     freeLookCamera.Lens = lens;
+                }
+            }
+
+            if (aimCamera != null)
+            {
+                var lens = aimCamera.Lens;
+                if (Mathf.Abs(lens.FieldOfView - finalTargetFOV) > 0.01f)
+                {
+                    lens.FieldOfView = finalTargetFOV;
+                    aimCamera.Lens = lens;
+                }
+
+                var tpf = aimCamera.GetComponent<CinemachineThirdPersonFollow>();
+                if (tpf != null)
+                {
+                    tpf.CameraDistance = Mathf.Clamp(1.5f + (currentZoom - 1.0f) * 0.5f, 0.5f, 3f);
                 }
             }
         }

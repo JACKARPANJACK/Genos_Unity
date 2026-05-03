@@ -51,11 +51,19 @@ namespace Climbing
 
         void Update()
         {
-            animator.SetFloat("Velocity", animVelocity.magnitude);
+            if (controller != null && controller.allowMovement)
+            {
+                animator.SetFloat("Velocity", animVelocity.magnitude);
+            }
+            else
+            {
+                animator.SetFloat("Velocity", 0f);
+            }
 
             animState = animator.GetCurrentAnimatorStateInfo(0);
 
-            if (animState.IsTag("Root") || animState.IsTag("Drop"))
+            // Force Root Motion if movement is suppressed (Ability/Takedown) or tagged
+            if (animState.IsTag("Root") || animState.IsTag("Drop") || (controller != null && !controller.allowMovement))
             {
                 animator.applyRootMotion = true;
             }

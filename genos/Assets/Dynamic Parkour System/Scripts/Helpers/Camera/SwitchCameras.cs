@@ -40,7 +40,8 @@ namespace Climbing
             None,
             Freelook,
             Slide,
-            IdleCutscene
+            IdleCutscene,
+            Aim
         }
 
         CameraType curCam = CameraType.None;
@@ -48,6 +49,7 @@ namespace Climbing
         [SerializeField] private CinemachineCamera FreeLook;
         [SerializeField] private CinemachineCamera Slide;
         [SerializeField] private CinemachineCamera IdleCutscene;
+        [SerializeField] private CinemachineCamera Aim;
 
         [Header("Idle Camera Panning")]
         [SerializeField] private float panSpeed = 5f; // Degrees per second
@@ -110,6 +112,7 @@ namespace Climbing
                     currentPlayerTransform = null;
                     currentHeadTransform = null;
                 }
+                if (Aim != null) Aim.Priority = 0;
                 FreeLook.Priority = 1;
                 curCam = CameraType.Freelook;
             }
@@ -121,9 +124,23 @@ namespace Climbing
             if (curCam != CameraType.Slide)
             {
                 FreeLook.Priority = 0;
+                if (Aim != null) Aim.Priority = 0;
                 if (IdleCutscene != null) IdleCutscene.Priority = 0;
                 Slide.Priority = 1;
                 curCam = CameraType.Slide;
+            }
+        }
+
+        //Switches To Aim Cam
+        public void AimCam()
+        {
+            if (curCam != CameraType.Aim && Aim != null)
+            {
+                FreeLook.Priority = 0;
+                Slide.Priority = 0;
+                if (IdleCutscene != null) IdleCutscene.Priority = 0;
+                Aim.Priority = 1;
+                curCam = CameraType.Aim;
             }
         }
 
@@ -134,6 +151,7 @@ namespace Climbing
             {
                 FreeLook.Priority = 0;
                 Slide.Priority = 0;
+                if (Aim != null) Aim.Priority = 0;
 
                 if (playerTransform != null)
                 {

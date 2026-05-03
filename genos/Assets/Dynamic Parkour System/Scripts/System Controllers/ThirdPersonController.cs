@@ -58,6 +58,9 @@ namespace Climbing
         public bool isDashing => isAirDashing || isGroundDashing;
         [HideInInspector] public ParkourState activeParkourState = ParkourState.None;
 
+        private float maxFallHeight = 0f;
+        private bool isChargeJumpActive = false;
+
         [Header("Air Dash Settings")]
         public DashSetting airDashSetting = new DashSetting { dashForce = 35f, dashTime = 0.2f, recoverTime = 0.4f };
         public bool canAirDash = true;
@@ -136,13 +139,23 @@ private float nextAfterImageTime = 0f;
 
             if (cameraController == null)
                 Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
-        }
+
+            AutoAssignSockets();
+            }
 
         private void Start()
         {
             characterMovement.OnLanded += characterAnimation.Land;
-            characterMovement.OnLanded += () => cameraController?.ShakeMedium();
-            characterMovement.OnLanded += () => PlayVFXAtFeet(landingCrackVFX);
+            characterMovement.OnLanded += () => 
+            {
+                float fallDistance = maxFallHeight - transform.position.y;
+                if (isChargeJumpActive || fallDistance > 20f)
+                {
+                    cameraController?.ShakeMedium();
+                    PlayVFXAtFeet(landingCrackVFX);
+                }
+                isChargeJumpActive = false;
+            };
             characterMovement.OnLanded += () => 
             {
                 if (characterInput.run && characterInput.movement.sqrMagnitude > 0.01f)
@@ -194,7 +207,16 @@ private float nextAfterImageTime = 0f;
         void Update()
         {
             //Detect if Player is on Ground
+            bool previousGrounded = isGrounded;
             isGrounded = OnGround();
+
+            if (!isGrounded)
+            {
+                if (previousGrounded)
+                    maxFallHeight = transform.position.y;
+                else if (transform.position.y > maxFallHeight)
+                    maxFallHeight = transform.position.y;
+            }
 
             //Get Input if controller and movement are not disabled
             if (!dummy && allowMovement)
@@ -822,10 +844,10 @@ else
             if (chargeRatio > 0.1f)
             {
                 PlayVFX(chargeJumpVFX);
+                PlayVFXAtFeet(jumpLaunchVFX);
+                isChargeJumpActive = true;
                 if (chargeRatio > 0.5f) StartCoroutine(AfterImageBurst(0.3f));
             }
-
-            PlayVFXAtFeet(jumpLaunchVFX);
 
             isJumping = true;
             onAir = true;
