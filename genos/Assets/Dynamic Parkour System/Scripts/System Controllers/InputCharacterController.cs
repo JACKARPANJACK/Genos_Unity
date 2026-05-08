@@ -42,6 +42,8 @@ namespace Climbing
         [HideInInspector] public bool dash;
         [HideInInspector] public bool aim;
         [HideInInspector] public bool fire;
+        [HideInInspector] public bool lightAttack;
+        [HideInInspector] public bool heavyAttack;
         [HideInInspector] public bool doubleTapDashTriggered;
         private float _cycleDelta;
         private bool cycleDeltaConsumed = false;
@@ -58,11 +60,13 @@ namespace Climbing
         }
 
         private bool _runHeld = false;
-private bool _jumpHeld = false;
+        private bool _jumpHeld = false;
         private bool _dropHeld = false;
         private bool _dashHeld = false;
         private bool _aimHeld = false;
         private bool _fireHeld = false;
+        private bool _lightAttackHeld = false;
+        private bool _heavyAttackHeld = false;
 
         private InputAction dashAction;
         private float lastJumpPressedTime = float.NegativeInfinity;
@@ -70,12 +74,16 @@ private bool _jumpHeld = false;
         private float lastDropPressedTime = float.NegativeInfinity;
         private float lastDashPressedTime = float.NegativeInfinity;
         private float lastFirePressedTime = float.NegativeInfinity;
+        private float lastLightAttackPressedTime = float.NegativeInfinity;
+        private float lastHeavyAttackPressedTime = float.NegativeInfinity;
 
         private float consumedJumpPressedTime = float.NegativeInfinity;
         private float consumedJumpReleasedTime = float.NegativeInfinity;
         private float consumedDropPressedTime = float.NegativeInfinity;
         private float consumedDashPressedTime = float.NegativeInfinity;
         private float consumedFirePressedTime = float.NegativeInfinity;
+        private float consumedLightAttackPressedTime = float.NegativeInfinity;
+        private float consumedHeavyAttackPressedTime = float.NegativeInfinity;
 
         [Header("Double Tap Settings")]
         public float doubleTapTimeFrame = 0.3f;
@@ -149,6 +157,14 @@ private bool _jumpHeld = false;
             controls.Player.Fire.performed += ctx => { _fireHeld = true; lastFirePressedTime = Time.time; };
             controls.Player.Fire.canceled += ctx => _fireHeld = false;
 
+            // Light Attack
+            controls.Player.LightAttack.performed += ctx => { _lightAttackHeld = true; lastLightAttackPressedTime = Time.time; };
+            controls.Player.LightAttack.canceled += ctx => _lightAttackHeld = false;
+
+            // Heavy Attack
+            controls.Player.HeavyAttack.performed += ctx => { _heavyAttackHeld = true; lastHeavyAttackPressedTime = Time.time; };
+            controls.Player.HeavyAttack.canceled += ctx => _heavyAttackHeld = false;
+
             // Cycle
             controls.Player.CycleMode.performed += ctx => { _cycleDelta = ctx.ReadValue<float>(); cycleDeltaConsumed = false; };
             controls.Player.CycleMode.canceled += ctx => { _cycleDelta = 0; cycleDeltaConsumed = false; };
@@ -165,6 +181,8 @@ private bool _jumpHeld = false;
             dash = _dashHeld;
             aim = _aimHeld;
             fire = _fireHeld;
+            lightAttack = _lightAttackHeld;
+            heavyAttack = _heavyAttackHeld;
 
             if (ConsumeDashPressedBuffered()) doubleTapDashTriggered = true;
         }
@@ -193,6 +211,22 @@ private bool _jumpHeld = false;
         {
             if (!FirePressedBuffered(customBuffer) || consumedFirePressedTime == lastFirePressedTime) return false;
             consumedFirePressedTime = lastFirePressedTime;
+            return true;
+        }
+
+        public bool LightAttackPressedBuffered(float customBuffer = -1f) => IsBuffered(lastLightAttackPressedTime, customBuffer);
+        public bool ConsumeLightAttackPressedBuffered(float customBuffer = -1f)
+        {
+            if (!LightAttackPressedBuffered(customBuffer) || consumedLightAttackPressedTime == lastLightAttackPressedTime) return false;
+            consumedLightAttackPressedTime = lastLightAttackPressedTime;
+            return true;
+        }
+
+        public bool HeavyAttackPressedBuffered(float customBuffer = -1f) => IsBuffered(lastHeavyAttackPressedTime, customBuffer);
+        public bool ConsumeHeavyAttackPressedBuffered(float customBuffer = -1f)
+        {
+            if (!HeavyAttackPressedBuffered(customBuffer) || consumedHeavyAttackPressedTime == lastHeavyAttackPressedTime) return false;
+            consumedHeavyAttackPressedTime = lastHeavyAttackPressedTime;
             return true;
         }
 

@@ -54,8 +54,9 @@ namespace Climbing
         [HideInInspector] public bool isJumping = false;
         [HideInInspector] public bool inSlope = false;
         [HideInInspector] public bool isVaulting = false;
+        [HideInInspector] public bool isMeleeAttacking = false;
         [HideInInspector] public bool dummy = false;
-        public bool isDashing => isAirDashing || isGroundDashing;
+public bool isDashing => isAirDashing || isGroundDashing;
         [HideInInspector] public ParkourState activeParkourState = ParkourState.None;
 
         private float maxFallHeight = 0f;
@@ -127,6 +128,7 @@ private float nextAfterImageTime = 0f;
         private float movementTurnSmoothVelocity;
         private float idleTurnSmoothVelocity;
         private float idleTurnTimer;
+        private Climbing.Combat.MeleeCombatController meleeController;
 
         private void Awake()
         {
@@ -136,9 +138,10 @@ private float nextAfterImageTime = 0f;
             characterDetection = GetComponent<DetectionCharacterController>();
             vaultingController = GetComponent<VaultingController>();
             wallRunController = GetComponent<WallRunController>();
+            meleeController = GetComponent<Climbing.Combat.MeleeCombatController>();
 
             if (cameraController == null)
-                Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
+Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
 
             AutoAssignSockets();
             }
@@ -239,14 +242,14 @@ private float nextAfterImageTime = 0f;
                 if (cameraController != null)
                 {
                     cameraController.isIdle = characterInput.movement.sqrMagnitude < 0.01f;
-                    cameraController.swayAmount = 0.5f; // More pronounced random movement like DMC/MGR
+                    cameraController.swayAmount = 0.15f; // Reduced from 0.5 for stability
                 }
-            }
-            else
-            {
+}
+                else
+                {
                 ResetJumpCharge();
-            }
-        }
+                }
+                }
 
         private void LateUpdate()
         {
@@ -975,23 +978,27 @@ else
             {
                 idleTurnTimer = 0f;
                 idleTurnSmoothVelocity = 0f;
-                RotatePlayer(direction);
+                if (!characterInput.aim && !isMeleeAttacking)
+                {
+                    RotatePlayer(direction);
+                }
                 characterAnimation.animator.SetBool("Released", false);
 
                 // Reset turning angle when player starts moving
                 characterAnimation.animator.SetFloat("TurnAngle", 0f);
 
                 // Restore FOV to current intended movement speed
-                if (!IsParkourBusy)
+                bool skipMovementFOV = IsParkourBusy || characterInput.aim || isMeleeAttacking || (meleeController != null && meleeController.IsInCombo);
+                if (!skipMovementFOV)
                 {
                     if (characterMovement.GetState() == MovementState.Running)
                         cameraController?.SetFOVState(CameraFOVState.Run);
                     else
                         cameraController?.SetFOVState(CameraFOVState.Walk);
                 }
-}
-            else
-            {
+                }
+                else
+                {
                 idleTurnTimer += Time.deltaTime;
 
                 // Smoothly rotate the player to face the camera direction when idle
@@ -1002,7 +1009,7 @@ else
                 // for 45, 90, or 180 degree turn animations.
                 characterAnimation.animator.SetFloat("TurnAngle", angleDiff);
 
-                if (Mathf.Abs(angleDiff) > idleTurnToCameraThreshold && idleTurnTimer >= idleTurnToCameraDelay)
+                if (!characterInput.aim && Mathf.Abs(angleDiff) > idleTurnToCameraThreshold && idleTurnTimer >= idleTurnToCameraDelay)
                 {
                     float angle = Mathf.SmoothDampAngle(
                         transform.eulerAngles.y,
@@ -1013,9 +1020,15 @@ else
                 }
 
                 ToggleWalk();
-                cameraController?.SetFOVState(CameraFOVState.Idle);
+
+                bool skipIdleFOV = IsParkourBusy || characterInput.aim || isMeleeAttacking || (meleeController != null && meleeController.IsInCombo);
+                if (!skipIdleFOV)
+                {
+                    cameraController?.SetFOVState(CameraFOVState.Idle);
+                }
+
                 characterAnimation.animator.SetBool("Released", true);
-            }
+                }
 
             return translation;
         }

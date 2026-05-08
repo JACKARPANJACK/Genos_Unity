@@ -386,7 +386,7 @@ public void DisableFeetIK()
                                      state.IsTag("NoIK") || state.IsTag("Vault");
 
             bool shouldDisableIK = !enableFeetIK || controller.dummy || anim == null || 
-                                   isParkourActive || isRestrictedState;
+                                   (isParkourActive && !controller.isMeleeAttacking) || (isRestrictedState && !controller.isMeleeAttacking);
 
             if (shouldDisableIK)
             {

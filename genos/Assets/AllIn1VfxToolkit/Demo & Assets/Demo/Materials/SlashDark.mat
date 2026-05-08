@@ -2,22 +2,35 @@
 %TAG !u! tag:unity3d.com,2011:
 --- !u!21 &2100000
 Material:
-  serializedVersion: 6
+  serializedVersion: 8
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: SlashDark
   m_Shader: {fileID: 4800000, guid: b430983578466934c944e7171b4c372c, type: 3}
-  m_ShaderKeywords: ADDITIVECONFIG_ON ALPHAFADEINPUTSTREAM_ON ALPHAFADETRANSPARENCYTOO_ON
-    ALPHAFADEUSESHAPE1_ON COLORRAMPGRAD_ON FADE_ON MASK_ON OFFSETSTREAM_ON SHAPE2_ON
-    SHAPE3_ON
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords:
+  - ADDITIVECONFIG_ON
+  - ALPHAFADEINPUTSTREAM_ON
+  - ALPHAFADETRANSPARENCYTOO_ON
+  - ALPHAFADEUSESHAPE1_ON
+  - COLORRAMPGRAD_ON
+  - FADE_ON
+  - MASK_ON
+  - OFFSETSTREAM_ON
+  - SHAPE2_ON
+  - SHAPE3_ON
+  m_InvalidKeywords:
+  - _SURFACE_TYPE_TRANSPARENT
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 3000
+  m_CustomRenderQueue: 3200
   stringTagMap: {}
   disabledShaderPasses: []
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
@@ -26,8 +39,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _ColorRampTexGradient:
-        m_Texture: {fileID: -3479016163245748355, guid: 7e9adcb6ad57d6842ae22656c3bc53c2,
-          type: 2}
+        m_Texture: {fileID: -3479016163245748355, guid: 7e9adcb6ad57d6842ae22656c3bc53c2, type: 2}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _DistNormalMap:
@@ -51,7 +63,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: 1a748330fd1f90e448ec7b4fb53ed8af, type: 3}
+        m_Texture: {fileID: 2800000, guid: a5ff27b0851ac2b4cada865b857d6611, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MaskTex:
@@ -90,6 +102,7 @@ Material:
         m_Texture: {fileID: 2800000, guid: 48da24d771916524899d36e4bfe7f762, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    m_Ints: []
     m_Floats:
     - _Alpha: 1
     - _AlphaBrightness: 0
@@ -206,7 +219,7 @@ Material:
     - _ShapeRotationSpeed: 0
     - _ShapeXSpeed: 2
     - _ShapeYSpeed: 0
-    - _SoftFactor: 0.5
+    - _SoftFactor: 3
     - _SrcMode: 1
     - _TextureScrollXSpeed: 0
     - _TextureScrollYSpeed: 0
@@ -243,3 +256,5 @@ Material:
     - _Shape2Color: {r: 1, g: 1, b: 1, a: 1}
     - _Shape3Color: {r: 1, g: 1, b: 1, a: 1}
     - _ShapeColor: {r: 1, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

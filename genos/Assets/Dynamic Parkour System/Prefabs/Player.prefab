@@ -2699,8 +2699,6 @@ GameObject:
   - component: {fileID: 3357106064773310197}
   - component: {fileID: 7740783538530506785}
   - component: {fileID: 3599172815124771998}
-  - component: {fileID: 1594109620753501171}
-  - component: {fileID: 4067615656743422291}
   m_Layer: 0
   m_Name: AimCam
   m_TagString: Untagged
@@ -2716,8 +2714,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2676769444056407870}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.5, y: 2.4616027, z: 5.844734}
+  m_LocalRotation: {x: 8.032749e-14, y: 1, z: -0.00000011920926, w: -4.019436e-14}
+  m_LocalPosition: {x: -0.5899999, y: 1.4616026, z: 5.374733}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2779,7 +2777,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineThirdPersonFollow
   Damping: {x: 0.1, y: 0.5, z: 0.3}
-  ShoulderOffset: {x: 0.5, y: 0.4, z: -0.5}
+  ShoulderOffset: {x: 0.59, y: -0.6, z: -0.03}
   VerticalArmLength: 0.5
   CameraSide: 1
   CameraDistance: 1.5
@@ -2792,81 +2790,6 @@ MonoBehaviour:
     CameraRadius: 0.2
     DampingIntoCollision: 0
     DampingFromCollision: 0.5
---- !u!114 &1594109620753501171
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2676769444056407870}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 62d54399b04b4fa48a73e121d4937dd4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachinePanTilt
-  ReferenceFrame: 0
-  RecenterTarget: 0
-  PanAxis:
-    Value: 0
-    Center: 0
-    Range: {x: -180, y: 180}
-    Wrap: 1
-    Recentering:
-      Enabled: 0
-      Wait: 1
-      Time: 2
-    Restrictions: 0
-  TiltAxis:
-    Value: 0
-    Center: 0
-    Range: {x: -70, y: 70}
-    Wrap: 0
-    Recentering:
-      Enabled: 0
-      Wait: 1
-      Time: 2
-    Restrictions: 0
---- !u!114 &4067615656743422291
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2676769444056407870}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 89875cdc57c54474a8a74efd9b2a3b5d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineInputAxisController
-  ScanRecursively: 1
-  SuppressInputWhileBlending: 1
-  IgnoreTimeScale: 0
-  m_ControllerManager:
-    Controllers:
-    - Name: Look X (Pan)
-      Owner: {fileID: 1594109620753501171}
-      Enabled: 1
-      Input:
-        InputAction: {fileID: -5630151704836100654, guid: 1d6e640e716dc4ff6989b73d02023f2b, type: 3}
-        Gain: 1
-        CancelDeltaTime: 0
-      InputValue: 0
-      Driver:
-        AccelTime: 0.2
-        DecelTime: 0.2
-    - Name: Look Y (Tilt)
-      Owner: {fileID: 1594109620753501171}
-      Enabled: 1
-      Input:
-        InputAction: {fileID: -5630151704836100654, guid: 1d6e640e716dc4ff6989b73d02023f2b, type: 3}
-        Gain: -1
-        CancelDeltaTime: 0
-      InputValue: 0
-      Driver:
-        AccelTime: 0.2
-        DecelTime: 0.2
-  PlayerIndex: -1
-  AutoEnableInputs: 1
 --- !u!1 &2746509904594492097
 GameObject:
   m_ObjectHideFlags: 0
@@ -3970,7 +3893,6 @@ MonoBehaviour:
   FreeLook: {fileID: 4985668961091532172}
   Slide: {fileID: 3708861311938866238}
   IdleCutscene: {fileID: 6392964862368644629}
-  Aim: {fileID: 7740783538530506785}
   panSpeed: 5
 --- !u!114 &2451832260469270561
 MonoBehaviour:
@@ -4265,8 +4187,6 @@ MonoBehaviour:
   zoomSpeed: 2
   minZoom: 0.5
   maxZoom: 2
-  aimPriority: 20
-  aimShoulderOffset: {x: 0.5, y: 0, z: 0}
   minFOV: 15
   maxFOV: 60
   zoomSensitivity: 2
@@ -4327,10 +4247,10 @@ MonoBehaviour:
     dutch: 0
     dutchBlendTime: 0.2
     dutchEase: 3
-  aimProfile:
-    fieldOfView: 30
-    fovBlendTime: 0.2
-    fovEase: 9
+  combatProfile:
+    fieldOfView: 75
+    fovBlendTime: 0.25
+    fovEase: 6
     dutch: 0
     dutchBlendTime: 0.2
     dutchEase: 3
@@ -4453,7 +4373,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineDeoccluder
   CollideAgainst:
     serializedVersion: 2
-    m_Bits: 961
+    m_Bits: 577
   IgnoreTag: Player
   TransparentLayers:
     serializedVersion: 2
@@ -4691,6 +4611,8 @@ GameObject:
   - component: {fileID: 263141653539993598}
   - component: {fileID: 5864093747284003876}
   - component: {fileID: 113525697289698044}
+  - component: {fileID: 8231211618805715621}
+  - component: {fileID: 3029318700951100336}
   m_Layer: 10
   m_Name: PlayerModel
   m_TagString: Player
@@ -4735,7 +4657,7 @@ Animator:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5556358534646836578}
   m_Enabled: 1
-  m_Avatar: {fileID: 9000000, guid: f88ef7e7ef08a6249a4172c50d387656, type: 3}
+  m_Avatar: {fileID: 9000000, guid: 83214eb29a073ef4b9f38ffab4ebf3e3, type: 3}
   m_Controller: {fileID: 9100000, guid: e3e25480d2d5544409a577f05406fb17, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 1
@@ -4841,6 +4763,8 @@ MonoBehaviour:
   dash: 0
   aim: 0
   fire: 0
+  lightAttack: 0
+  heavyAttack: 0
   doubleTapDashTriggered: 0
   doubleTapTimeFrame: 0.3
 --- !u!114 &5556358534646836590
@@ -4867,6 +4791,7 @@ MonoBehaviour:
   isJumping: 0
   inSlope: 0
   isVaulting: 0
+  isMeleeAttacking: 0
   dummy: 0
   activeParkourState: 0
   airDashSetting:
@@ -5201,22 +5126,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HairPhysicsSystem
   hairRoots:
-  - {fileID: 3497419952921343227}
-  - {fileID: 1899133364942439747}
-  - {fileID: 6076253958964079128}
-  - {fileID: 1958721963764825322}
-  - {fileID: 1065838402612338690}
-  - {fileID: 4028094553081419982}
-  - {fileID: 5017837900343714419}
-  - {fileID: 2166052932722941083}
-  - {fileID: 1827296335071831787}
-  - {fileID: 5834775107846709302}
-  - {fileID: 5933334552188844797}
-  - {fileID: 3846250314930913501}
+  - {fileID: 5205025087075768210}
+  - {fileID: 3697696290116543818}
+  - {fileID: 5692048228406163261}
+  - {fileID: 971277795039605804}
+  - {fileID: 1455677572153135043}
+  - {fileID: 661009005360700928}
+  - {fileID: 2865017486687926829}
+  - {fileID: 8530111173673546814}
+  - {fileID: 6315217350538052325}
+  - {fileID: 8120914856320848533}
+  - {fileID: 8176541775337747974}
+  - {fileID: 6312632838544508778}
   headCollider: {fileID: 0}
-  skinWidth: 0.03
+  skinWidth: 0.001
   headTransform: {fileID: 4014704328145287366}
-  headRadius: 0.02
+  headRadius: 0.06
   headOffset: {x: 0, y: 0, z: 0}
   gravity: {x: 0, y: -9.81, z: 0}
   damping: 0.95
@@ -5497,6 +5422,45 @@ MonoBehaviour:
   - {fileID: 2800000, guid: ba35805de5a824b418c589faa4373897, type: 3}
   - {fileID: 2800000, guid: eec6bf32ef17a1341a9fcc05dc0abadd, type: 3}
   - {fileID: 2800000, guid: 7a87c53ad5552b840ba72ce3e735958e, type: 3}
+--- !u!114 &8231211618805715621
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5556358534646836578}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2c3a01d659730d74b8179404820d61e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Climbing.Combat.MeleeCombatController
+  comboResetTime: 1
+  hitRange: 2
+  hitAngle: 100
+  magnetismRange: 6
+  magnetismAngle: 70
+  enemyLayer:
+    serializedVersion: 2
+    m_Bits: 1024
+--- !u!114 &3029318700951100336
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5556358534646836578}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c084f5f7f6a4cea468a16a292ae42ef5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Climbing.Combat.CombatVFXManager
+  boosterTrails:
+  - {fileID: 0}
+  - {fileID: 0}
+  boosterParticles:
+  - {fileID: 3016520325218862062, guid: becc14fce23311f46ae3c38c7ac54744, type: 3}
+  - {fileID: 0}
+  - {fileID: 0}
 --- !u!1 &5635836107123522131
 GameObject:
   m_ObjectHideFlags: 0

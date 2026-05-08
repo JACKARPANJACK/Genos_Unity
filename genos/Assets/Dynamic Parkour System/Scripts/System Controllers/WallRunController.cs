@@ -126,6 +126,11 @@ public float maxWallRunTime = 4.0f;
                 {
                     WallKick();
                 }
+                else if (!characterInput.run || characterInput.movement.sqrMagnitude < 0.01f)
+                {
+                    if (thirdPersonController.characterDetection.showDebug) Debug.Log("[WallRun] Stopping: Running/Directional input released.");
+                    StopWallRun();
+                }
                 else if (characterInput.run && characterInput.movement.y < -0.1f)
                 {
                     if (thirdPersonController.characterDetection.showDebug) Debug.Log("[WallRun] Stopping: Shift + S pressed.");
@@ -143,6 +148,13 @@ public float maxWallRunTime = 4.0f;
 
         private void CheckForWall()
         {
+            // Only search for a new wall if holding shift (run) and input movement is applied
+            if (!isWallRunning && (!characterInput.run || characterInput.movement.sqrMagnitude < 0.01f))
+            {
+                lastWall = null;
+                return;
+            }
+
             if (thirdPersonController.isGrounded && !isWallRunning)
             {
                 lastWall = null; 

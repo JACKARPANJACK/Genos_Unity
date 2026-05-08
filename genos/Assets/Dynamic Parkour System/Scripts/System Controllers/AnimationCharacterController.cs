@@ -63,7 +63,8 @@ namespace Climbing
             animState = animator.GetCurrentAnimatorStateInfo(0);
 
             // Force Root Motion if movement is suppressed (Ability/Takedown) or tagged
-            if (animState.IsTag("Root") || animState.IsTag("Drop") || (controller != null && !controller.allowMovement))
+            // EXCEPTION: Disable during Melee attacks to allow manual magnetism/lunges
+            if (!controller.isMeleeAttacking && (animState.IsTag("Root") || animState.IsTag("Drop") || (controller != null && !controller.allowMovement)))
             {
                 animator.applyRootMotion = true;
             }
@@ -71,7 +72,7 @@ namespace Climbing
             {
                 animator.applyRootMotion = false;
             }
-        }
+}
 
         public void SetAnimVelocity(Vector3 value) { animVelocity = value; animVelocity.y = 0; }
         public Vector3 GetAnimVelocity() { return animVelocity; }

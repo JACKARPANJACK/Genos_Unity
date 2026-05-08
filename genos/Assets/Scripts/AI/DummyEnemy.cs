@@ -1,9 +1,10 @@
 using UnityEngine;
 using UnityEngine.AI; // Added for NavMeshAgent
+using System.Collections;
 
 namespace Climbing.AI
 {
-    public class DummyEnemy : MonoBehaviour
+public class DummyEnemy : MonoBehaviour
     {
         public float health = 100f;
         public float detectionRadius = 15f;
@@ -108,9 +109,53 @@ namespace Climbing.AI
             }
         }
 
-        public void TakeDamage(float amount)
+        public bool IsFinisherReady => health > 0 && health < 40f; // Threshold for finishers
+        private bool isBeingFinished = false;
+
+        public void PlayFinisher(string finisherType)
         {
+            if (isBeingFinished) return;
+            isBeingFinished = true;
+            
+            if (agent != null) agent.enabled = false;
+            if (rb != null) rb.isKinematic = true;
+
+            // Play victim animation if animator exists
+            var animator = GetComponentInChildren<Animator>();
+            if (animator != null)
+            {
+                // Mapping finisher type to victim state
+                string victimState = finisherType switch
+                {
+                    "Finisher_01" => "Finisher_01_Victim",
+                    "Finisher_02" => "Finisher_02_Victim",
+                    "Finisher_Neck" => "Finisher_Neck_Victim",
+                    _ => "Finisher_01_Victim"
+                };
+                animator.CrossFadeInFixedTime(victimState, 0.1f);
+            }
+
+            StartCoroutine(FinisherDeathRoutine());
+        }
+
+        private IEnumerator FinisherDeathRoutine()
+        {
+            yield return new WaitForSeconds(2.5f); // Duration of finisher
+            Die();
+        }
+
+        public void TakeDamage(float amount)
+{
             health -= amount;
+
+            // Hit Feedback: Visual Scale Pulse
+            if (hitFeedbackCoroutine != null) StopCoroutine(hitFeedbackCoroutine);
+            hitFeedbackCoroutine = StartCoroutine(HitFeedbackRoutine());
+
+            // Hit Stun & Physics
+            if (hitStunCoroutine != null) StopCoroutine(hitStunCoroutine);
+            hitStunCoroutine = StartCoroutine(HitStunRoutine());
+
             if (health <= 0)
             {
                 Die();
@@ -125,20 +170,51 @@ namespace Climbing.AI
             }
         }
 
+        private Coroutine hitFeedbackCoroutine;
+        private Coroutine hitStunCoroutine;
+
+        private IEnumerator HitStunRoutine()
+        {
+            if (agent != null) agent.enabled = false;
+            if (rb != null) rb.isKinematic = false;
+
+            yield return new WaitForSeconds(0.6f); // Time to fly back and react
+
+            if (health > 0)
+            {
+                // Try to recover to NavMesh
+                if (rb != null) rb.isKinematic = true;
+                if (agent != null) agent.enabled = true;
+            }
+        }
+
+        private IEnumerator HitFeedbackRoutine()
+{
+            Vector3 originalScale = transform.localScale;
+            transform.localScale = originalScale * 1.15f;
+            float t = 0;
+            while (t < 0.2f)
+            {
+                transform.localScale = Vector3.Lerp(originalScale * 1.15f, originalScale, t / 0.2f);
+                t += Time.deltaTime;
+                yield return null;
+            }
+            transform.localScale = originalScale;
+        }
+
         private void Die()
         {
             Debug.Log(gameObject.name + " defeated!");
-            // Detach and fly away, don't reset immediately
             if (agent != null) agent.enabled = false;
             
-            // Allow them to look like they died
-            Collider col = GetComponent<Collider>();
-            if (rb != null && col != null)
+            // Re-enable physics for "death" fly-away effect
+            if (rb != null)
             {
-                // Optionally disable specific scripts or components
-                this.enabled = false; 
+                rb.isKinematic = false;
+                rb.useGravity = true;
             }
             
+            this.enabled = false; 
             Destroy(gameObject, 3f);
         }
 

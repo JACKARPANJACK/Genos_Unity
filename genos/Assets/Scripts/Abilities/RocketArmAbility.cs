@@ -67,29 +67,9 @@ private string takedownStateBase = "Takedown_";
             float delta = input.GetCycleDelta();
             if (Mathf.Abs(delta) > 0.1f && Time.time > lastCycleTime + cycleCooldown)
             {
-                if (!input.aim)
-                {
-                    int dir = delta > 0 ? 1 : -1;
-                    CycleType(dir);
-                    lastCycleTime = Time.time;
-                }
-            }
-
-            bool isAimedState = controller.cameraController.ActiveFOVState == CameraFOVState.Aim;
-            if (input.aim && isAimedState)
-            {
-                Vector3 camFwd = controller.mainCamera.forward;
-                camFwd.y = 0;
-                if (camFwd.sqrMagnitude > 0.01f)
-                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(camFwd), Time.deltaTime * 40f);
-
-                if (uiController != null)
-                {
-                    Camera cam = controller.mainCamera.GetComponent<Camera>();
-                    Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-                    bool hittingEnemy = Physics.Raycast(ray, out RaycastHit hit, 200f, ~LayerMask.GetMask("Player", "Ignore Raycast"), QueryTriggerInteraction.Ignore) && hit.collider.CompareTag("Enemy");
-                    uiController.SetCrosshairTargeting(hittingEnemy);
-                }
+                int dir = delta > 0 ? 1 : -1;
+                CycleType(dir);
+                lastCycleTime = Time.time;
             }
         }
 
@@ -147,9 +127,15 @@ private string takedownStateBase = "Takedown_";
             return false;
         }
 
-        private void PerformRocketPunch(Transform target)
+        public void PerformRocketPunch(Transform target)
         {
-            StartCoroutine(PerformRocketPunchRoutine(target));
+            if (target == null)
+            {
+                // Try to find target if null
+                IsEnemyInMeleeRange(out target);
+            }
+            if (target != null)
+                StartCoroutine(PerformRocketPunchRoutine(target));
         }
 
         private IEnumerator PerformRocketPunchRoutine(Transform target)
@@ -303,12 +289,15 @@ private string takedownStateBase = "Takedown_";
             if (socket == null) socket = transform;
 
             Vector3 targetPos;
-            bool isAimedShot = !isQuickshot && (controller.cameraController.ActiveFOVState == CameraFOVState.Aim);
-            
+            bool isAimedShot = false; // Aim cam logic removed
+
             if (isAimedShot)
-            {
-                Camera cam = controller.mainCamera.GetComponent<Camera>();
+{
+                Camera cam = Camera.main;
+                if (cam == null) cam = controller.mainCamera.GetComponent<Camera>();
+                
                 Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+                // Target everything except Player
                 int mask = ~(LayerMask.GetMask("Player") | LayerMask.GetMask("Ignore Raycast"));
                 if (Physics.Raycast(ray, out RaycastHit hit, 300f, mask, QueryTriggerInteraction.Ignore))
                     targetPos = hit.point;
@@ -320,9 +309,16 @@ private string takedownStateBase = "Takedown_";
                 targetPos = socket.position + transform.forward * 150f;
             }
 
+            // Ensure the target isn't too close behind or inside the socket
+            Vector3 toTarget = targetPos - socket.position;
+            if (Vector3.Dot(toTarget, transform.forward) < 0.5f)
+            {
+                targetPos = socket.position + transform.forward * 10f;
+            }
+
             Vector3 launchDir = (targetPos - socket.position).normalized;
             GameObject arm = Instantiate(armPrefab, socket.position, Quaternion.LookRotation(launchDir));
-            
+
             if (!isRight)
             {
                 Transform visual = arm.transform.Find("Visual");

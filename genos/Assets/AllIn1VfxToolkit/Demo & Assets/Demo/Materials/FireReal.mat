@@ -2,24 +2,49 @@
 %TAG !u! tag:unity3d.com,2011:
 --- !u!21 &2100000
 Material:
-  serializedVersion: 6
+  serializedVersion: 8
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: FireReal
-  m_Shader: {fileID: 4800000, guid: b430983578466934c944e7171b4c372c, type: 3}
-  m_ShaderKeywords: ADDITIVECONFIG_ON ALPHAFADETRANSPARENCYTOO_ON ALPHAFADE_ON COLORGRADING_ON
-    GLOW_ON SHAPE1DISTORT_ON SHAPE2CONTRAST_ON SHAPE2DISTORT_ON SHAPE2_ON
+  m_Shader: {fileID: 4800000, guid: 0406db5a14f94604a8c57ccfbc9f3b46, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords:
+  - _SURFACE_TYPE_TRANSPARENT
+  m_InvalidKeywords:
+  - ADDITIVECONFIG_ON
+  - ALPHAFADETRANSPARENCYTOO_ON
+  - ALPHAFADE_ON
+  - COLORGRADING_ON
+  - GLOW_ON
+  - SHAPE1DISTORT_ON
+  - SHAPE2CONTRAST_ON
+  - SHAPE2DISTORT_ON
+  - SHAPE2_ON
+  - _FLIPBOOKBLENDING_OFF
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: 3000
-  stringTagMap: {}
-  disabledShaderPasses: []
+  stringTagMap:
+    RenderType: Transparent
+  disabledShaderPasses:
+  - DepthOnly
+  - SHADOWCASTER
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 2800000, guid: 91f2676eca9f3c1469f679600392bc51, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BumpMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _ColorRampTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -34,6 +59,10 @@ Material:
         m_Offset: {x: 0, y: 0}
     - _DistortTex:
         m_Texture: {fileID: 2800000, guid: fcb027caad6963b4a80539bbce0d10e9, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _EmissionMap:
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _FadeBurnTex:
@@ -88,9 +117,11 @@ Material:
         m_Texture: {fileID: 2800000, guid: 48da24d771916524899d36e4bfe7f762, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    m_Ints: []
     m_Floats:
     - _Alpha: 0.3
     - _AlphaBrightness: 0
+    - _AlphaClip: 0
     - _AlphaContrast: 1
     - _AlphaCutoffValue: 0.25
     - _AlphaFadeAmount: -0.1
@@ -98,15 +129,24 @@ Material:
     - _AlphaFadeSmooth: 0.499
     - _AlphaStepMax: 0.075
     - _AlphaStepMin: 0
+    - _AlphaToMask: 0
+    - _Blend: 1
+    - _BlendOp: 0
     - _BlurIntensity: 4.5
     - _CamDistFadeStepMax: 100
     - _CamDistFadeStepMin: 0
     - _CamDistProximityFade: 0
+    - _CameraFadingEnabled: 0
+    - _CameraFarFadeDistance: 2
+    - _CameraNearFadeDistance: 1
     - _ColorGradingMidPoint: 0.209
     - _ColorMask: 15
+    - _ColorMode: 0
     - _ColorRampBlend: 1
     - _ColorRampLuminosity: 0
+    - _Cull: 2
     - _CullingOption: 0
+    - _Cutoff: 0.5
     - _DebugShape: 1
     - _DepthGlow: 0
     - _DepthGlowDist: 0.5
@@ -116,9 +156,14 @@ Material:
     - _DistortTexXSpeed: 5
     - _DistortTexYSpeed: 5
     - _DistortionBlend: 1
+    - _DistortionEnabled: 0
     - _DistortionPower: 5
     - _DistortionScrollXSpeed: 0
     - _DistortionScrollYSpeed: 0
+    - _DistortionStrength: 1
+    - _DistortionStrengthScaled: 0.1
+    - _DstBlend: 10
+    - _DstBlendAlpha: 10
     - _DstMode: 1
     - _EditorDrawers: 63
     - _FadeAmount: -0.1
@@ -129,6 +174,8 @@ Material:
     - _FadeScrollYSpeed: 0
     - _FadeTransition: 0.5
     - _FishEyeUvAmount: 0.35
+    - _FlipbookBlending: 0
+    - _FlipbookMode: 0
     - _Glow: 0
     - _GlowGlobal: 3
     - _HandDrawnAmount: 10
@@ -138,6 +185,7 @@ Material:
     - _HsvShift: 180
     - _LightAmount: 0
     - _MaskPow: 1
+    - _Mode: 0
     - _OffsetSh1: -0.34
     - _OffsetSh2: 1
     - _OffsetSh3: 1
@@ -145,6 +193,7 @@ Material:
     - _PixelateSize: 32
     - _PosterizeGamma: 0.75
     - _PosterizeNumColors: 8
+    - _QueueOffset: 0
     - _RandomSh1Mult: 1
     - _RandomSh2Mult: 1
     - _RandomSh3Mult: 1
@@ -204,8 +253,14 @@ Material:
     - _ShapeRotationSpeed: 0
     - _ShapeXSpeed: 0
     - _ShapeYSpeed: 0
-    - _SoftFactor: 0.01
+    - _SoftFactor: 3
+    - _SoftParticlesEnabled: 0
+    - _SoftParticlesFarFadeDistance: 1
+    - _SoftParticlesNearFadeDistance: 0
+    - _SrcBlend: 1
+    - _SrcBlendAlpha: 1
     - _SrcMode: 1
+    - _Surface: 1
     - _TextureScrollXSpeed: 1
     - _TextureScrollYSpeed: 0
     - _TimingSeed: 0
@@ -228,11 +283,15 @@ Material:
     - _ZoomAmount: 1.5
     m_Colors:
     - _BackFaceTint: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _BaseColor: {r: 5, g: 2, b: 0.1, a: 0.5}
+    - _BaseColorAddSubDiff: {r: 0, g: 0, b: 0, a: 0}
+    - _CameraFadeParams: {r: 0, g: Infinity, b: 0, a: 0}
+    - _Color: {r: 5.0000005, g: 2, b: 0.09999997, a: 0.5}
     - _ColorGradingDark: {r: 0.78431374, g: 0.062270224, b: 0, a: 1}
     - _ColorGradingLight: {r: 1.4980392, g: 0.972549, b: 0, a: 1}
     - _ColorGradingMiddle: {r: 0.7490196, g: 0.23921569, b: 0, a: 1}
     - _DepthGlowColor: {r: 1, g: 1, b: 1, a: 1}
+    - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FadeBurnColor: {r: 1, g: 1, b: 0, a: 1}
     - _FrontFaceTint: {r: 1, g: 1, b: 1, a: 1}
     - _GlowColor: {r: 1, g: 1, b: 1, a: 1}
@@ -241,3 +300,19 @@ Material:
     - _Shape2Color: {r: 1, g: 1, b: 1, a: 1}
     - _Shape3Color: {r: 1, g: 1, b: 1, a: 1}
     - _ShapeColor: {r: 0.98833734, g: 0.98833734, b: 0.98833734, a: 1}
+    - _SoftParticleFadeParams: {r: 0, g: 0, b: 0, a: 0}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
+--- !u!114 &6891087992774081189
+MonoBehaviour:
+  m_ObjectHideFlags: 11
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0353a89b1f911e48b9e16bdc9f2e058, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Editor::UnityEditor.Rendering.Universal.AssetVersion
+  version: 10

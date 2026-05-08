@@ -56,3 +56,5 @@ genos/UserSettings/AI.Animate/AnimateGeneratorSettings.asset
 /genos/UserSettings
 /genos/Temp
 /genos/Assets/_Recovery
+/genos/GeneratedAssets
+*.unitypackage
