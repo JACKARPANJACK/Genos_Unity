@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5516919095193292318}
   - component: {fileID: 9026183802507311730}
   - component: {fileID: 3840603561943713822}
+  - component: {fileID: 1301700016208031754}
   m_Layer: 0
   m_Name: RocketArm_Clean
   m_TagString: Untagged
@@ -56,6 +57,7 @@ MonoBehaviour:
   impactVFX: {fileID: 0}
   trailVFX: {fileID: 4580657320398059509, guid: eebc2bec969e5ef40a6c1a16002355ef, type: 3}
   explosionVFX: {fileID: 0}
+  hunterFireVFX: {fileID: 0}
   wireRenderer: {fileID: 0}
 --- !u!135 &9026183802507311730
 SphereCollider:
@@ -105,6 +107,23 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &1301700016208031754
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3386949381480973781}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 51851fc4c981b52459d67910b2c48553, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FireballProjectile
+  speed: 100
+  lifeTime: 5
+  scale: 1
+  damage: 30
+  impactEffect: {fileID: 416251089823111746, guid: 240c830bfe588ad4f9925288b65d7a18, type: 3}
 --- !u!1 &8142912250191723315
 GameObject:
   m_ObjectHideFlags: 0

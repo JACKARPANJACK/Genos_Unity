@@ -518,6 +518,8 @@ private string takedownStateBase = "Takedown_";
 
         private void AttachBone(HumanBodyBones enemyBone, HumanBodyBones playerBone, Animator enemyAnim, List<KeyValuePair<Transform, Transform>> attachments)
         {
+            if (enemyAnim == null || !enemyAnim.isHuman || playerAnim == null || !playerAnim.isHuman) return;
+
             Transform eb = enemyAnim.GetBoneTransform(enemyBone);
             Transform pb = playerAnim.GetBoneTransform(playerBone);
             if (eb != null && pb != null)
@@ -528,5 +530,5 @@ private string takedownStateBase = "Takedown_";
                 attachments.Add(new KeyValuePair<Transform, Transform>(eb, pb));
             }
         }
-    }
+}
 }

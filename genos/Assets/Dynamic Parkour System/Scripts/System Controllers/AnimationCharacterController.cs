@@ -61,10 +61,16 @@ namespace Climbing
             }
 
             animState = animator.GetCurrentAnimatorStateInfo(0);
+            
+            // Check if we are in or transitioning to/from a melee state
+            bool inMelee = animState.IsTag("Melee");
+            bool transitioning = animator.IsInTransition(0);
+            bool nextMelee = transitioning && animator.GetNextAnimatorStateInfo(0).IsTag("Melee");
+            bool activeCombat = controller.isMeleeAttacking || inMelee || nextMelee;
 
             // Force Root Motion if movement is suppressed (Ability/Takedown) or tagged
             // EXCEPTION: Disable during Melee attacks to allow manual magnetism/lunges
-            if (!controller.isMeleeAttacking && (animState.IsTag("Root") || animState.IsTag("Drop") || (controller != null && !controller.allowMovement)))
+            if (!activeCombat && (animState.IsTag("Root") || animState.IsTag("Drop") || (controller != null && !controller.allowMovement)))
             {
                 animator.applyRootMotion = true;
             }

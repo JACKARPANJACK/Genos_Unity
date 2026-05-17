@@ -85,10 +85,30 @@ namespace Climbing.Combat
             GameObject prefab = GetPrefab(type);
             if (prefab != null)
             {
+                // Dynamic scaling based on move type
+                float finalScale = scale;
+                if (type == VFXType.BigExplosion) finalScale *= 2.5f;
+                if (type == VFXType.IncinerationCannon) finalScale *= 3.0f;
+                if (type == VFXType.GroundCrack) finalScale *= 1.8f;
+
                 GameObject instance = Instantiate(prefab, position, rotation);
-                instance.transform.localScale = Vector3.one * scale;
+                instance.transform.localScale = Vector3.one * finalScale;
                 
-                // Cleanup handled by ParticleSystem.main.stopAction = Destroy (set in prefab fix)
+                // Robust Cleanup: 
+                // 1. If it has ParticleSystems, try to use their StopAction or a timer.
+                // 2. Always set a fallback destroy timer to prevent scene clutter/leaks.
+                var ps = instance.GetComponent<ParticleSystem>();
+                if (ps != null)
+                {
+                    var main = ps.main;
+                    main.stopAction = ParticleSystemStopAction.Destroy;
+                    // Fallback for looping systems or complex hierarchies
+                    Destroy(instance, main.duration + main.startLifetime.constantMax + 2f);
+                }
+                else
+                {
+                    Destroy(instance, 4f);
+                }
             }
 
             HandleContextualEffects(type, position, shakeLevel);

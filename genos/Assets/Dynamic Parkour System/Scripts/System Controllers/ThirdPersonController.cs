@@ -128,7 +128,6 @@ private float nextAfterImageTime = 0f;
         private float movementTurnSmoothVelocity;
         private float idleTurnSmoothVelocity;
         private float idleTurnTimer;
-        private Climbing.Combat.MeleeCombatController meleeController;
 
         private void Awake()
         {
@@ -138,10 +137,9 @@ private float nextAfterImageTime = 0f;
             characterDetection = GetComponent<DetectionCharacterController>();
             vaultingController = GetComponent<VaultingController>();
             wallRunController = GetComponent<WallRunController>();
-            meleeController = GetComponent<Climbing.Combat.MeleeCombatController>();
 
             if (cameraController == null)
-Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
+            Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
 
             AutoAssignSockets();
             }
@@ -327,9 +325,6 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
             // Consume the input so it doesn't fire elsewhere
             characterInput.ConsumeJumpPressedBuffered();
 
-            // Find target parkour point - 20m range as requested
-            Point targetPoint = FindNearestParkourPoint(20f, 60f);
-
             // Find if backwards input is applied relative to camera
             bool isBackDash = characterInput.movement.y < -0.1f;
             bool hasInput = characterInput.movement.sqrMagnitude > 0.01f;
@@ -345,19 +340,7 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
             Vector3 dashDir;
             float overrideDashForce = -1f;
 
-            if (targetPoint != null)
-            {
-                dashDir = (targetPoint.transform.position - transform.position).normalized;
-                float dist = Vector3.Distance(targetPoint.transform.position, transform.position);
-                
-                // Scale force to reach the point exactly within dashTime, capped at 60 units/s
-                overrideDashForce = Mathf.Min(dist / airDashSetting.dashTime, 60f);
-                
-                transform.rotation = Quaternion.LookRotation(new Vector3(dashDir.x, 0, dashDir.z), Vector3.up);
-                airDashDirection = dashDir;
-                isBackDash = false; // Override backdash if we target a point
-            }
-            else if (camFwd.sqrMagnitude > 0.001f)
+            if (camFwd.sqrMagnitude > 0.001f)
             {
                 if (hasInput)
                 {
@@ -371,7 +354,7 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
                 airDashDirection = dashDir;
 
                 // Determine if we should rotate the character to face the dash direction or keep camera facing
-                // Side/Back dashes typically keep the character facing forward (camera direction)
+                // Keep the character facing forward (camera direction) when side dashing to trigger directional animations properly
                 float angle = Vector3.Angle(camFwd, dashDir);
                 if (angle > 45f)
                 {
@@ -429,6 +412,7 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
                 StopElectricityEffects();
                 ClearParkourState(ParkourState.Dashing);
                 characterMovement.stopMotion = false;
+                characterMovement.EnableFeetIK();
                 airDashRecoverTimer = airDashSetting.recoverTime;
                 cameraController?.SetFOVState(CameraFOVState.Walk);
             })
@@ -442,6 +426,7 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
                 if (characterMovement != null) 
                 {
                     characterMovement.stopMotion = false;
+                    characterMovement.EnableFeetIK();
                 }
                 cameraController?.SetFOVState(CameraFOVState.Walk);
             });
@@ -529,9 +514,6 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
 
             groundDashTween?.Kill();
 
-            // Find target parkour point - 15m range
-            Point targetPoint = FindNearestParkourPoint(15f, 45f);
-
             // Find if backwards input is applied
             bool isBackDash = characterInput.movement.y < -0.1f;
             bool hasInput = characterInput.movement.sqrMagnitude > 0.01f;
@@ -547,17 +529,7 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
             Vector3 dashDir;
             float overrideDashForce = -1f;
 
-            if (targetPoint != null)
-            {
-                dashDir = (targetPoint.transform.position - transform.position).normalized;
-                float dist = Vector3.Distance(targetPoint.transform.position, transform.position);
-                overrideDashForce = Mathf.Min(dist / groundDashSetting.dashTime, 60f);
-
-                transform.rotation = Quaternion.LookRotation(new Vector3(dashDir.x, 0, dashDir.z), Vector3.up);
-                groundDashDirection = dashDir;
-                isBackDash = false;
-            }
-            else if (camFwd.sqrMagnitude > 0.001f)
+            if (camFwd.sqrMagnitude > 0.001f)
             {
                 if (hasInput)
                 {
@@ -570,7 +542,7 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
 
                 groundDashDirection = dashDir;
 
-                // Determine if we should rotate to face dash or keep camera facing (for side/back dashes)
+                // Determine if we should rotate to face dash or keep camera facing
                 float angle = Vector3.Angle(camFwd, dashDir);
                 if (angle > 45f)
                 {
@@ -621,6 +593,7 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
                 ClearParkourState(ParkourState.Dashing);
                 StopElectricityEffects();
                 characterMovement.stopMotion = false;
+                characterMovement.EnableFeetIK();
                 isGroundDashRecovering = true;
                 groundDashRecoverTimer = groundDashSetting.recoverTime;
                 cameraController?.SetFOVState(CameraFOVState.Run);
@@ -634,6 +607,7 @@ Debug.LogError("Attach the Camera Controller located in the Free Look Camera");
                 if (characterMovement != null) 
                 {
                     characterMovement.stopMotion = false;
+                    characterMovement.EnableFeetIK();
                 }
                 cameraController?.SetFOVState(CameraFOVState.Walk);
             });
@@ -714,6 +688,7 @@ cameraController?.SetCameraRotationLock(true);
                     characterAnimation.SetDashing(false);
                     ClearParkourState(ParkourState.Dashing);
                     characterMovement.stopMotion = false;
+                    characterMovement.EnableFeetIK();
                     isGroundDashRecovering = true;
                     groundDashRecoverTimer = groundDashSetting.recoverTime;
                     cameraController?.SetFOVState(CameraFOVState.Walk);
@@ -765,6 +740,7 @@ cameraController?.SetCameraRotationLock(true);
                     characterAnimation.SetDashing(false);
                     ClearParkourState(ParkourState.Dashing);
                     characterMovement.stopMotion = false;
+                    characterMovement.EnableFeetIK();
                     airDashRecoverTimer = airDashSetting.recoverTime;
                     cameraController?.SetFOVState(CameraFOVState.Walk);
                     cameraController?.SetCameraRotationLock(false);
@@ -978,17 +954,26 @@ else
             {
                 idleTurnTimer = 0f;
                 idleTurnSmoothVelocity = 0f;
-                if (!characterInput.aim && !isMeleeAttacking)
+
+                // Check for combat transitions to prevent snapping
+                bool transitioningFromCombat = false;
+                if (characterAnimation != null && characterAnimation.animator != null)
+                {
+                    var info = characterAnimation.animator.GetCurrentAnimatorStateInfo(0);
+                    transitioningFromCombat = info.IsTag("Melee") && characterAnimation.animator.IsInTransition(0);
+                }
+
+                if (!characterInput.aim && !isMeleeAttacking && !transitioningFromCombat)
                 {
                     RotatePlayer(direction);
                 }
-                characterAnimation.animator.SetBool("Released", false);
+characterAnimation.animator.SetBool("Released", false);
 
                 // Reset turning angle when player starts moving
                 characterAnimation.animator.SetFloat("TurnAngle", 0f);
 
                 // Restore FOV to current intended movement speed
-                bool skipMovementFOV = IsParkourBusy || characterInput.aim || isMeleeAttacking || (meleeController != null && meleeController.IsInCombo);
+                bool skipMovementFOV = IsParkourBusy;
                 if (!skipMovementFOV)
                 {
                     if (characterMovement.GetState() == MovementState.Running)
@@ -1021,7 +1006,7 @@ else
 
                 ToggleWalk();
 
-                bool skipIdleFOV = IsParkourBusy || characterInput.aim || isMeleeAttacking || (meleeController != null && meleeController.IsInCombo);
+                bool skipIdleFOV = IsParkourBusy;
                 if (!skipIdleFOV)
                 {
                     cameraController?.SetFOVState(CameraFOVState.Idle);
@@ -1085,12 +1070,12 @@ else
 
         public bool WantsParkourTraversal(float minMagnitude = 0.01f)
         {
-            return characterInput.run && characterInput.movement.sqrMagnitude >= minMagnitude;
+            return characterInput.movement.sqrMagnitude >= minMagnitude;
         }
 
         public bool WantsAutoParkour(float minForwardInput = 0.25f)
         {
-            return WantsParkourTraversal() && characterInput.movement.y >= minForwardInput;
+            return WantsParkourTraversal(0.01f) && characterInput.movement.y >= minForwardInput;
         }
 
         public bool IsParkourBusy

@@ -72,7 +72,7 @@ namespace Climbing
             if (TryStartSurfaceSlide(moveDirection))
                 return true;
 
-            bool wantsToSlide = controller.characterInput.run || WantsAutoParkour(0.1f);
+            bool wantsToSlide = (controller.characterInput.run && controller.characterInput.aim) || WantsAutoParkour(0.1f);
             if (!wantsToSlide)
                 return false;
 
@@ -171,7 +171,8 @@ namespace Climbing
             if (!Physics.Raycast(origin, Vector3.down, out RaycastHit surfaceHit, SurfaceProbeHeight + GroundSnapDistance))
                 return false;
 
-            if (!IsExplicitSlideSurface(surfaceHit.collider))
+            bool isManualSlide = controller.characterInput.run && controller.characterInput.aim;
+            if (!IsExplicitSlideSurface(surfaceHit.collider) && !isManualSlide)
                 return false;
 
             float slopeAngle = Vector3.Angle(surfaceHit.normal, Vector3.up);
@@ -254,7 +255,8 @@ namespace Climbing
             Vector3 probeOrigin = wantedPos + Vector3.up * SurfaceProbeHeight;
             if (Physics.Raycast(probeOrigin, Vector3.down, out RaycastHit groundHit, SurfaceProbeHeight + GroundSnapDistance))
             {
-                if (IsExplicitSlideSurface(groundHit.collider))
+                bool isManualSlide = slideMode == SlideMode.Surface && controller.characterInput.run && controller.characterInput.aim;
+                if (IsExplicitSlideSurface(groundHit.collider) || isManualSlide)
                 {
                     float slopeAngle = Vector3.Angle(groundHit.normal, Vector3.up);
                     if (slopeAngle <= SlideMaxSlopeAngle + 30f)

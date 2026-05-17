@@ -26,7 +26,7 @@ public class DummyEnemy : MonoBehaviour
             
             // Set tag for detection
             gameObject.tag = "Enemy";
-            gameObject.layer = LayerMask.NameToLayer("Default"); // Ensure layer is suitable
+            // gameObject.layer = LayerMask.NameToLayer("Default"); // Ensure layer is suitable
 
             agent = GetComponent<NavMeshAgent>();
             if (agent == null) agent = gameObject.AddComponent<NavMeshAgent>();
@@ -44,50 +44,57 @@ public class DummyEnemy : MonoBehaviour
             }
         }
 
-        void Update()
+        private void SafeResetPath()
         {
-            if (playerTransform == null || !agent.enabled) return;
-
-            float distanceToPlayer = Vector3.Distance(transform.position, playerTransform.position);
-
-            // State Machine
-            switch (currentState)
+            if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh)
             {
-                case EnemyState.Idle:
-                    if (distanceToPlayer <= detectionRadius)
-                    {
-                        currentState = EnemyState.Chase;
-                    }
-                    break;
-                case EnemyState.Chase:
-                    if (distanceToPlayer > detectionRadius * 1.5f) // Lose interest
-                    {
-                        currentState = EnemyState.Idle;
-                        agent.ResetPath();
-                    }
-                    else if (distanceToPlayer <= attackRadius)
-                    {
-                        currentState = EnemyState.Attack;
-                        agent.ResetPath(); // Stop moving to attack
-                    }
-                    else
-                    {
-                        FollowPlayer();
-                    }
-                    break;
-                case EnemyState.Attack:
-                    if (distanceToPlayer > attackRadius)
-                    {
-                        currentState = EnemyState.Chase;
-                    }
-                    else
-                    {
-                        // Perform Attack logic here (face player, etc.)
-                        FaceTarget(playerTransform.position);
-                    }
-                    break;
+                agent.ResetPath();
             }
         }
+void Update()
+{
+    if (health <= 0 || playerTransform == null || !agent.enabled) return;
+
+    float distanceToPlayer = Vector3.Distance(transform.position, playerTransform.position);
+
+    // State Machine
+    switch (currentState)
+    {
+        case EnemyState.Idle:
+            if (distanceToPlayer <= detectionRadius)
+            {
+                currentState = EnemyState.Chase;
+            }
+            break;
+        case EnemyState.Chase:
+            if (distanceToPlayer > detectionRadius * 1.5f) // Lose interest
+            {
+                currentState = EnemyState.Idle;
+                SafeResetPath();
+            }
+            else if (distanceToPlayer <= attackRadius)
+            {
+                currentState = EnemyState.Attack;
+                SafeResetPath(); // Stop moving to attack
+            }
+            else
+            {
+                FollowPlayer();
+            }
+            break;
+        case EnemyState.Attack:
+            if (distanceToPlayer > attackRadius)
+            {
+                currentState = EnemyState.Chase;
+            }
+            else
+            {
+                // Perform Attack logic here (face player, etc.)
+                FaceTarget(playerTransform.position);
+            }
+            break;
+    }
+}
 
         private void FollowPlayer()
         {

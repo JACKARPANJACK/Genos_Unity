@@ -51,13 +51,15 @@ namespace Climbing
         public float fovBlendTime = 0.3f;
         public Ease fovEase = Ease.OutCubic;
 
-        [Tooltip("Dutch / roll angle in degrees. Negative = lean left, positive = lean right. " +
-                 "WallRun overrides this per-side at runtime.")]
+        [Tooltip("Dutch / roll angle in degrees.")]
         public float dutch = 0f;
 
         [Tooltip("Seconds to blend toward this Dutch angle.")]
         public float dutchBlendTime = 0.2f;
         public Ease dutchEase = Ease.OutSine;
+
+        [Tooltip("Shoulder offset for this state.")]
+        public Vector3 offset = Vector3.zero;
     }
 
     /// <summary>Single camera-shake impulse configuration.</summary>
@@ -120,33 +122,34 @@ namespace Climbing
         public float baseFOV = 60f;
 
         [Header("FOV Profiles")]
-        public CameraStateProfile idleProfile  = new CameraStateProfile { fieldOfView = 50f, fovBlendTime = 0.5f, fovEase = Ease.OutCubic };
-        public CameraStateProfile walkProfile  = new CameraStateProfile { fieldOfView = 55f, fovBlendTime = 0.4f };
-        public CameraStateProfile runProfile   = new CameraStateProfile { fieldOfView = 65f, fovBlendTime = 0.35f };
+        public CameraStateProfile idleProfile  = new CameraStateProfile { fieldOfView = 50f, fovBlendTime = 0.5f, fovEase = Ease.OutCubic, offset = new Vector3(0, 0, 0) };
+        public CameraStateProfile walkProfile  = new CameraStateProfile { fieldOfView = 55f, fovBlendTime = 0.4f, offset = new Vector3(0, 0.1f, 0) };
+        public CameraStateProfile runProfile   = new CameraStateProfile { fieldOfView = 65f, fovBlendTime = 0.35f, offset = new Vector3(0, 0.15f, 0) };
         public CameraStateProfile wallRunProfile = new CameraStateProfile
         {
             fieldOfView = 75f,  fovBlendTime = 0.25f, fovEase = Ease.OutCubic,
-            dutch = 0f,         dutchBlendTime = 0.2f, dutchEase = Ease.OutSine
+            dutch = 0f,         dutchBlendTime = 0.2f, dutchEase = Ease.OutSine,
+            offset = new Vector3(0, 0.2f, 0)
         };
         public CameraStateProfile parkourProfile = new CameraStateProfile
         {
-            fieldOfView = 70f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad
+            fieldOfView = 70f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad, offset = new Vector3(0, 0.25f, 0)
         };
         public CameraStateProfile airDashProfile = new CameraStateProfile
         {
-            fieldOfView = 80f, fovBlendTime = 0.12f, fovEase = Ease.OutExpo
+            fieldOfView = 80f, fovBlendTime = 0.12f, fovEase = Ease.OutExpo, offset = new Vector3(0, 0.3f, 0)
         };
         public CameraStateProfile jumpProfile = new CameraStateProfile
         {
-            fieldOfView = 70f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad
+            fieldOfView = 70f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad, offset = new Vector3(0, 0.2f, 0)
         };
         public CameraStateProfile chargeJumpProfile = new CameraStateProfile
         {
-            fieldOfView = 90f, fovBlendTime = 0.1f, fovEase = Ease.OutExpo
+            fieldOfView = 90f, fovBlendTime = 0.1f, fovEase = Ease.OutExpo, offset = new Vector3(0, 0.4f, 0)
         };
         public CameraStateProfile combatProfile = new CameraStateProfile
         {
-            fieldOfView = 75f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad
+            fieldOfView = 75f, fovBlendTime = 0.2f, fovEase = Ease.OutQuad, offset = new Vector3(0.6f, 0.2f, 0)
         };
 
         // ?? Camera shake ????????????????????????????????????????????????????
@@ -441,7 +444,7 @@ namespace Climbing
             .SetEase(profile.fovEase)
             .OnComplete(() => fovTween = null);
 
-            // Dutch tween (only if profile has a Dutch value — wall run overrides via SetWallRunTilt)
+            // Dutch tween
             dutchTween?.Kill();
             dutchTween = DOVirtual.Float(currentDutch, profile.dutch, profile.dutchBlendTime, v =>
             {
@@ -449,6 +452,15 @@ namespace Climbing
             })
             .SetEase(profile.dutchEase)
             .OnComplete(() => dutchTween = null);
+
+            // Offset tween
+            offsetTween?.Kill();
+            offsetTween = DOVirtual.Vector3(baseOffset, profile.offset, profile.fovBlendTime, v =>
+            {
+                baseOffset = v;
+            })
+            .SetEase(profile.fovEase)
+            .OnComplete(() => offsetTween = null);
         }
 
         private void ApplyLensValues()

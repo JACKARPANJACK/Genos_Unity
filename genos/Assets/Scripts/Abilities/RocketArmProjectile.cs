@@ -189,18 +189,23 @@ namespace Climbing.Abilities
                     Rigidbody ownerRb = owner.GetComponent<Rigidbody>();
                     if (ownerRb != null)
                     {
+                        ownerRb.isKinematic = false;
                         Vector3 moveDir = (transform.position - owner.position).normalized;
                         ownerRb.linearVelocity = moveDir * returnSpeed * 1.5f;
                         if (Vector3.Distance(owner.position, transform.position) < 2.0f) { onReturn?.Invoke(null); Cleanup(); return; }
                     }
-                }
-                else
-                {
+                    }
+                    else
+                    {
                     grabbedObject.position = transform.position;
                     transform.position = Vector3.MoveTowards(transform.position, socket.position, returnSpeed * 1.5f * Time.deltaTime);
-                    if (targetRb != null) targetRb.linearVelocity = (socket.position - transform.position).normalized * returnSpeed;
-                }
-            }
+                    if (targetRb != null) 
+                    {
+                        targetRb.isKinematic = false;
+                        targetRb.linearVelocity = (socket.position - transform.position).normalized * returnSpeed;
+                    }
+                    }
+}
             else
             {
                 transform.position = Vector3.MoveTowards(transform.position, socket.position, returnSpeed * Time.deltaTime);

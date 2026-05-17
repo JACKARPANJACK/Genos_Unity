@@ -44,12 +44,16 @@ namespace Climbing
         [HideInInspector] public bool fire;
         [HideInInspector] public bool lightAttack;
         [HideInInspector] public bool heavyAttack;
+        [HideInInspector] public bool rocketArm;
         [HideInInspector] public bool doubleTapDashTriggered;
         private float _cycleDelta;
         private bool cycleDeltaConsumed = false;
 
+        public bool lightAttackHeld => _lightAttackHeld;
+        public bool heavyAttackHeld => _heavyAttackHeld;
+
         public float GetCycleDelta()
-        {
+{
             if (cycleDeltaConsumed) return 0f;
             return _cycleDelta;
         }
@@ -67,6 +71,7 @@ namespace Climbing
         private bool _fireHeld = false;
         private bool _lightAttackHeld = false;
         private bool _heavyAttackHeld = false;
+        private bool _rocketArmHeld = false;
 
         private InputAction dashAction;
         private float lastJumpPressedTime = float.NegativeInfinity;
@@ -76,6 +81,7 @@ namespace Climbing
         private float lastFirePressedTime = float.NegativeInfinity;
         private float lastLightAttackPressedTime = float.NegativeInfinity;
         private float lastHeavyAttackPressedTime = float.NegativeInfinity;
+        private float lastRocketArmPressedTime = float.NegativeInfinity;
 
         private float consumedJumpPressedTime = float.NegativeInfinity;
         private float consumedJumpReleasedTime = float.NegativeInfinity;
@@ -84,6 +90,7 @@ namespace Climbing
         private float consumedFirePressedTime = float.NegativeInfinity;
         private float consumedLightAttackPressedTime = float.NegativeInfinity;
         private float consumedHeavyAttackPressedTime = float.NegativeInfinity;
+        private float consumedRocketArmPressedTime = float.NegativeInfinity;
 
         [Header("Double Tap Settings")]
         public float doubleTapTimeFrame = 0.3f;
@@ -165,8 +172,12 @@ namespace Climbing
             controls.Player.HeavyAttack.performed += ctx => { _heavyAttackHeld = true; lastHeavyAttackPressedTime = Time.time; };
             controls.Player.HeavyAttack.canceled += ctx => _heavyAttackHeld = false;
 
+            // Rocket Arm
+            controls.Player.RocketArm.performed += ctx => { _rocketArmHeld = true; lastRocketArmPressedTime = Time.time; };
+            controls.Player.RocketArm.canceled += ctx => _rocketArmHeld = false;
+
             // Cycle
-            controls.Player.CycleMode.performed += ctx => { _cycleDelta = ctx.ReadValue<float>(); cycleDeltaConsumed = false; };
+controls.Player.CycleMode.performed += ctx => { _cycleDelta = ctx.ReadValue<float>(); cycleDeltaConsumed = false; };
             controls.Player.CycleMode.canceled += ctx => { _cycleDelta = 0; cycleDeltaConsumed = false; };
 
             // Exit
@@ -183,55 +194,64 @@ namespace Climbing
             fire = _fireHeld;
             lightAttack = _lightAttackHeld;
             heavyAttack = _heavyAttackHeld;
+            rocketArm = _rocketArmHeld;
 
             if (ConsumeDashPressedBuffered()) doubleTapDashTriggered = true;
-        }
+            }
 
-        private void OnDestroy() { if (controls != null) controls.Dispose(); }
-        void Exit() => Application.Quit();
+            private void OnDestroy() { if (controls != null) controls.Dispose(); }
+            void Exit() => Application.Quit();
 
-        public bool JumpPressedBuffered(float customBuffer = -1f) => IsBuffered(lastJumpPressedTime, customBuffer);
-        public bool ConsumeJumpPressedBuffered(float customBuffer = -1f)
-        {
+            public bool JumpPressedBuffered(float customBuffer = -1f) => IsBuffered(lastJumpPressedTime, customBuffer);
+            public bool ConsumeJumpPressedBuffered(float customBuffer = -1f)
+            {
             if (!JumpPressedBuffered(customBuffer) || consumedJumpPressedTime == lastJumpPressedTime) return false;
             consumedJumpPressedTime = lastJumpPressedTime;
             return true;
-        }
+            }
 
-        public bool DashPressedBuffered(float customBuffer = -1f) => IsBuffered(lastDashPressedTime, customBuffer);
-        public bool ConsumeDashPressedBuffered(float customBuffer = -1f)
-        {
+            public bool DashPressedBuffered(float customBuffer = -1f) => IsBuffered(lastDashPressedTime, customBuffer);
+            public bool ConsumeDashPressedBuffered(float customBuffer = -1f)
+            {
             if (!DashPressedBuffered(customBuffer) || consumedDashPressedTime == lastDashPressedTime) return false;
             consumedDashPressedTime = lastDashPressedTime;
             return true;
-        }
+            }
 
-        public bool FirePressedBuffered(float customBuffer = -1f) => IsBuffered(lastFirePressedTime, customBuffer);
-        public bool ConsumeFirePressedBuffered(float customBuffer = -1f)
-        {
+            public bool FirePressedBuffered(float customBuffer = -1f) => IsBuffered(lastFirePressedTime, customBuffer);
+            public bool ConsumeFirePressedBuffered(float customBuffer = -1f)
+            {
             if (!FirePressedBuffered(customBuffer) || consumedFirePressedTime == lastFirePressedTime) return false;
             consumedFirePressedTime = lastFirePressedTime;
             return true;
-        }
+            }
 
-        public bool LightAttackPressedBuffered(float customBuffer = -1f) => IsBuffered(lastLightAttackPressedTime, customBuffer);
-        public bool ConsumeLightAttackPressedBuffered(float customBuffer = -1f)
-        {
+            public bool LightAttackPressedBuffered(float customBuffer = -1f) => IsBuffered(lastLightAttackPressedTime, customBuffer);
+            public bool ConsumeLightAttackPressedBuffered(float customBuffer = -1f)
+            {
             if (!LightAttackPressedBuffered(customBuffer) || consumedLightAttackPressedTime == lastLightAttackPressedTime) return false;
             consumedLightAttackPressedTime = lastLightAttackPressedTime;
             return true;
-        }
+            }
 
-        public bool HeavyAttackPressedBuffered(float customBuffer = -1f) => IsBuffered(lastHeavyAttackPressedTime, customBuffer);
-        public bool ConsumeHeavyAttackPressedBuffered(float customBuffer = -1f)
-        {
+            public bool HeavyAttackPressedBuffered(float customBuffer = -1f) => IsBuffered(lastHeavyAttackPressedTime, customBuffer);
+            public bool ConsumeHeavyAttackPressedBuffered(float customBuffer = -1f)
+            {
             if (!HeavyAttackPressedBuffered(customBuffer) || consumedHeavyAttackPressedTime == lastHeavyAttackPressedTime) return false;
             consumedHeavyAttackPressedTime = lastHeavyAttackPressedTime;
             return true;
-        }
+            }
 
-        public bool ConsumeDoubleTapDashBuffered(float customBuffer = -1f)
-        {
+            public bool RocketArmPressedBuffered(float customBuffer = -1f) => IsBuffered(lastRocketArmPressedTime, customBuffer);
+            public bool ConsumeRocketArmPressedBuffered(float customBuffer = -1f)
+            {
+            if (!RocketArmPressedBuffered(customBuffer) || consumedRocketArmPressedTime == lastRocketArmPressedTime) return false;
+            consumedRocketArmPressedTime = lastRocketArmPressedTime;
+            return true;
+            }
+
+            public bool ConsumeDoubleTapDashBuffered(float customBuffer = -1f)
+{
             if (doubleTapDashTriggered) { doubleTapDashTriggered = false; return true; }
             return false;
         }

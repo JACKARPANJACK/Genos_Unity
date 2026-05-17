@@ -409,10 +409,10 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""13349b62-d47d-4916-84a7-916d5de5c8cf"",
-                    ""path"": ""<Mouse>/leftButton"",
+                    ""path"": ""<Keyboard>/q"",
                     ""interactions"": """",
                     ""processors"": """",
-                    ""groups"": """",
+                    ""groups"": ""Keyboard n Mouse"",
                     ""action"": ""RocketArm"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
@@ -453,7 +453,7 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""6b87ddd6-8eed-4e23-92dc-a65e3e6d9a9e"",
-                    ""path"": ""<Keyboard>/leftAlt"",
+                    ""path"": ""<Mouse>/rightButton"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -541,7 +541,7 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""d133532a-e134-4f3e-93e3-9a5f2ecea72c"",
-                    ""path"": ""<Mouse>/rightButton"",
+                    ""path"": ""<Keyboard>/f"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""Keyboard n Mouse"",

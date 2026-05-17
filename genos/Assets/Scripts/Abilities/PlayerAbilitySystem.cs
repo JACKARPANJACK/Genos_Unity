@@ -25,11 +25,11 @@ namespace Climbing.Abilities
         {
             if (input == null) return;
 
-            // ROCKET ARM LOGIC (Q key)
-            if (Keyboard.current != null && Keyboard.current.qKey.wasPressedThisFrame)
+            // ROCKET ARM LOGIC (Q key via Input System)
+            if (input.ConsumeRocketArmPressedBuffered())
             {
                 rocketArmAbility?.UseAbility();
             }
-        }
+}
     }
 }

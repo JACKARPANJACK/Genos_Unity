@@ -398,11 +398,6 @@ public void DisableFeetIK()
                     anim.SetIKPositionWeight(AvatarIKGoal.RightFoot, 0);
                     anim.SetIKRotationWeight(AvatarIKGoal.RightFoot, 0);
                     
-                    anim.SetIKPositionWeight(AvatarIKGoal.LeftHand, 0);
-                    anim.SetIKRotationWeight(AvatarIKGoal.LeftHand, 0);
-                    anim.SetIKPositionWeight(AvatarIKGoal.RightHand, 0);
-                    anim.SetIKRotationWeight(AvatarIKGoal.RightHand, 0);
-
                     // Stop pelvis adjustment and cache current position to prevent snapping on re-enable
                     lastPelvisPositionY = anim.bodyPosition.y;
                 }
